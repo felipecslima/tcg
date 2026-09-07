@@ -71,7 +71,7 @@ async function loadIndex() {
   setStatus(`Indexando ${setSel.value}…`);
   cards = await fetchSetCards(setSel.value);
   index = SetIndex.from(cards);
-  valid = validNumberSet(index, cards);
+  valid = validNumberSet(cards);
   printedTotal = cards[0]?.printedTotal ?? 0;
   setStatus(`Set ${setSel.value} pronto (${index.size} cartas). ${modeSel.value === 'camera' ? 'Inicie a câmera.' : 'Escolha uma imagem.'}`);
 }

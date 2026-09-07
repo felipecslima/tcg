@@ -12,7 +12,6 @@
  */
 import { parseCollectorNumber } from './numberParse.js';
 import { normalizeNumber } from '../matching/normalize.js';
-import type { SetIndex } from '../matching/engine.js';
 
 export interface ExtractCandidate {
   number: string;
@@ -29,7 +28,7 @@ export interface ExtractResult {
 }
 
 /** Números válidos do set, normalizados, pra validação cruzada rápida. */
-export function validNumberSet(index: SetIndex, cards: { number: string }[]): Set<string> {
+export function validNumberSet(cards: { number: string }[]): Set<string> {
   return new Set(cards.map((c) => normalizeNumber(c.number)));
 }
 

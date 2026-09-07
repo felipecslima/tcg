@@ -73,7 +73,7 @@ async function main() {
     if (!indices.has(set)) {
       const cards = await fetchSetCards(set);
       indices.set(set, SetIndex.from(cards));
-      validSets.set(set, validNumberSet(indices.get(set)!, cards));
+      validSets.set(set, validNumberSet(cards));
     }
     return { index: indices.get(set)!, valid: validSets.get(set)! };
   }
