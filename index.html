@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PokeCardex Core — Scanner</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; padding: 1rem; max-width: 960px; }
+      h1 { font-size: 1.2rem; margin: 0 0 0.5rem; }
+      .muted { opacity: 0.7; font-size: 0.85rem; }
+      .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; margin: 0.6rem 0; }
+      label { display: flex; flex-direction: column; font-size: 0.75rem; gap: 0.2rem; }
+      input, select, button { padding: 0.45rem; font-size: 0.95rem; }
+      button { cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem; }
+      @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+      .stage { position: relative; background: #0003; border-radius: 8px; overflow: hidden; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; }
+      video, #imgPreview { max-width: 100%; max-height: 100%; display: block; }
+      #guide { position: absolute; border: 2px dashed #22d3ee; border-radius: 6px; inset: 12% 18%; pointer-events: none; }
+      .status { font-size: 0.85rem; margin-top: 0.4rem; min-height: 1.2rem; }
+      .list { border: 1px solid #8884; border-radius: 8px; padding: 0.5rem; min-height: 4rem; }
+      .list h2 { font-size: 0.9rem; margin: 0 0 0.4rem; }
+      .item { display: flex; gap: 0.5rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid #8882; }
+      .item img { height: 54px; border-radius: 3px; }
+      .item .qty { margin-left: auto; font-weight: 700; }
+      .badge { font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 4px; }
+      .auto { background: #16a34a; color: #fff; }
+      .pend { background: #d97706; color: #fff; }
+      .pendrow input { width: 5rem; }
+      canvas.debug { image-rendering: pixelated; border: 1px solid #8884; height: 40px; }
+    </style>
+  </head>
+  <body>
+    <h1>PokeCardex Core — Scanner</h1>
+    <p class="muted">Escaneia o número de coletor no canto da carta e casa contra o set pré-selecionado. Auto só quando lê <code>N/M</code> e o denominador bate com o total do set — o resto vai pra pendências (confirmação manual rápida).</p>
+
+    <div class="row">
+      <label>Set (pré-filtro)
+        <select id="set"></select>
+      </label>
+      <label>Modo
+        <select id="mode">
+          <option value="camera">Câmera ao vivo</option>
+          <option value="image" selected>Imagem (teste)</option>
+        </select>
+      </label>
+      <button id="camBtn" hidden>Iniciar câmera</button>
+      <label id="fileWrap">Imagem da carta
+        <input id="file" type="file" accept="image/*" />
+      </label>
+      <button id="scanOnce">Escanear imagem</button>
+    </div>
+
+    <div class="cols">
+      <div>
+        <div class="stage">
+          <video id="video" playsinline muted hidden></video>
+          <img id="imgPreview" hidden alt="" />
+          <div id="guide" hidden></div>
+        </div>
+        <div class="status" id="status">Carregando sets…</div>
+        <div class="muted" id="debug"></div>
+      </div>
+      <div>
+        <div class="list" id="fila"><h2>Fila do lote (0)</h2></div>
+        <div class="list" id="pend" style="margin-top:0.8rem"><h2>Pendências (0)</h2></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
