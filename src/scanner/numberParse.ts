@@ -15,7 +15,10 @@ export interface ParsedNumber {
 }
 
 // "N/M" com prefixo alfabético opcional em cada lado (promos/trainer gallery).
-const FRACTION = /([A-Za-z]{0,4}\d{1,3})\s*[/／]\s*([A-Za-z]{0,4}\d{1,3})/;
+// O denominador aceita até 4 dígitos: o OCR costuma colar um dígito espúrio
+// nele ("154/7217", "010/7094"); quem consome decide se confia num total de
+// 4 dígitos (o Recognizer não confia — usa o texto cru contra o impresso).
+const FRACTION = /([A-Za-z]{0,4}\d{1,3})\s*[/／]\s*([A-Za-z]{0,4}\d{1,4})/;
 // token com dígitos e prefixo opcional, quando não há barra visível.
 const LONE = /\b([A-Za-z]{0,4}\d{1,3}[A-Za-z]?)\b/g;
 
