@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/pokeapi/, ''),
       },
+      '/tcgdex': {
+        target: 'https://api.tcgdex.net',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tcgdex/, ''),
+      },
     },
   },
 });

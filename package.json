@@ -9,7 +9,10 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "validate": "tsx scripts/validate.ts",
-    "ocr:validate": "tsx scripts/ocr-validate.ts"
+    "ocr:validate": "tsx scripts/ocr-validate.ts",
+    "phash:validate": "tsx scripts/phash-validate.ts",
+    "index:build": "tsx scripts/build-index.ts",
+    "e2e": "tsx scripts/e2e-validate.ts"
   },
   "devDependencies": {
     "sharp": "^0.35.4",

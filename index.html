@@ -2,70 +2,88 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PokeCardex Core — Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>PokeCardex — Scanner</title>
     <style>
       :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-      body { margin: 0; padding: 1rem; max-width: 960px; }
-      h1 { font-size: 1.2rem; margin: 0 0 0.5rem; }
-      .muted { opacity: 0.7; font-size: 0.85rem; }
-      .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; margin: 0.6rem 0; }
-      label { display: flex; flex-direction: column; font-size: 0.75rem; gap: 0.2rem; }
-      input, select, button { padding: 0.45rem; font-size: 0.95rem; }
+      body { margin: 0; padding: 0.8rem; max-width: 1000px; }
+      h1 { font-size: 1.15rem; margin: 0 0 0.3rem; }
+      .muted { opacity: 0.7; font-size: 0.82rem; }
+      .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; margin: 0.5rem 0; }
+      label { display: flex; flex-direction: column; font-size: 0.72rem; gap: 0.15rem; }
+      input, select, button { padding: 0.45rem 0.6rem; font-size: 0.95rem; }
       button { cursor: pointer; }
-      button:disabled { opacity: 0.5; cursor: default; }
-      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.8rem; }
-      @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
-      .stage { position: relative; background: #0003; border-radius: 8px; overflow: hidden; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; }
-      video, #imgPreview { max-width: 100%; max-height: 100%; display: block; }
-      #guide { position: absolute; border: 2px dashed #22d3ee; border-radius: 6px; inset: 12% 18%; pointer-events: none; }
-      .status { font-size: 0.85rem; margin-top: 0.4rem; min-height: 1.2rem; }
-      .list { border: 1px solid #8884; border-radius: 8px; padding: 0.5rem; min-height: 4rem; }
+      button.primary { background: #2563eb; color: #fff; border: 0; border-radius: 6px; font-weight: 600; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.6rem; }
+      @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+      .stage { position: relative; background: #000; border-radius: 10px; overflow: hidden; line-height: 0; }
+      .stage video, .stage img { display: block; width: 100%; height: auto; }
+      #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      .status { font-size: 0.85rem; margin-top: 0.4rem; min-height: 1.2rem; line-height: 1.3; }
+      .state { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; margin-right: 0.3rem; color: #fff; background: #6b7280; }
+      .state.candidate { background: #d97706; } .state.confirmed { background: #16a34a; }
+      .state.unknown { background: #dc2626; } .state.no_card { background: #6b7280; }
+      .result { display: flex; gap: 0.7rem; align-items: flex-start; border: 1px solid #8884; border-radius: 10px; padding: 0.6rem; min-height: 4rem; margin-top: 0.6rem; }
+      .result img { width: 96px; border-radius: 6px; }
+      .result .big { font-size: 1.05rem; font-weight: 700; }
+      .cands { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+      .cand { display: flex; flex-direction: column; align-items: center; font-size: 0.68rem; width: 64px; cursor: pointer; }
+      .cand img { width: 60px; border-radius: 4px; }
+      .cand.top img { outline: 3px solid #16a34a; }
+      .list { border: 1px solid #8884; border-radius: 10px; padding: 0.5rem; min-height: 4rem; }
       .list h2 { font-size: 0.9rem; margin: 0 0 0.4rem; }
       .item { display: flex; gap: 0.5rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid #8882; }
       .item img { height: 54px; border-radius: 3px; }
       .item .qty { margin-left: auto; font-weight: 700; }
-      .badge { font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 4px; }
-      .auto { background: #16a34a; color: #fff; }
-      .pend { background: #d97706; color: #fff; }
-      .pendrow input { width: 5rem; }
-      canvas.debug { image-rendering: pixelated; border: 1px solid #8884; height: 40px; }
+      .bar { height: 6px; background: #8883; border-radius: 3px; overflow: hidden; margin-top: 0.3rem; }
+      .bar i { display: block; height: 100%; background: #16a34a; width: 0; transition: width 0.15s; }
+      .search { width: 100%; box-sizing: border-box; }
+      .hits { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem; }
+      .hit { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; padding: 0.2rem; border-radius: 4px; }
+      .hit:hover { background: #8882; }
+      .hit img { height: 40px; }
+      code { font-size: 0.8rem; }
     </style>
   </head>
   <body>
-    <h1>PokeCardex Core — Scanner</h1>
-    <p class="muted">Escaneia o número de coletor no canto da carta e casa contra o set pré-selecionado. Auto só quando lê <code>N/M</code> e o denominador bate com o total do set — o resto vai pra pendências (confirmação manual rápida).</p>
+    <h1>PokeCardex — Scanner de arte</h1>
+    <p class="muted">Aponte a câmera pra carta dentro do quadro. O motor reconhece pela <strong>arte</strong> (idioma/holo-agnóstico), vota entre frames e só confirma quando estável — sem escolher o set. Em empate, lê o número pra desempatar.</p>
 
     <div class="row">
-      <label>Set (pré-filtro)
-        <select id="set"></select>
-      </label>
       <label>Modo
         <select id="mode">
-          <option value="camera">Câmera ao vivo</option>
-          <option value="image" selected>Imagem (teste)</option>
+          <option value="camera" selected>Câmera ao vivo</option>
+          <option value="photo">Foto (teste)</option>
         </select>
       </label>
-      <button id="camBtn" hidden>Iniciar câmera</button>
-      <label id="fileWrap">Imagem da carta
+      <label>Filtro (opcional)
+        <select id="series"><option value="">Catálogo inteiro</option></select>
+      </label>
+      <button id="camBtn" class="primary">Iniciar câmera</button>
+      <label id="fileWrap" hidden>Imagem
         <input id="file" type="file" accept="image/*" />
       </label>
-      <button id="scanOnce">Escanear imagem</button>
+      <button id="scanOnce" hidden>Reconhecer foto</button>
     </div>
 
     <div class="cols">
       <div>
-        <div class="stage">
+        <div class="stage" id="stage">
           <video id="video" playsinline muted hidden></video>
           <img id="imgPreview" hidden alt="" />
-          <div id="guide" hidden></div>
+          <canvas id="overlay"></canvas>
         </div>
-        <div class="status" id="status">Carregando sets…</div>
+        <div class="status" id="status">Carregando índice…</div>
         <div class="muted" id="debug"></div>
+        <div class="result" id="result"><span class="muted">Nenhuma carta ainda.</span></div>
       </div>
       <div>
         <div class="list" id="fila"><h2>Fila do lote (0)</h2></div>
-        <div class="list" id="pend" style="margin-top:0.8rem"><h2>Pendências (0)</h2></div>
+        <div class="list" style="margin-top:0.8rem">
+          <h2>Busca manual (pendências)</h2>
+          <input id="manual" class="search" placeholder="nome ou número (ex.: Eevee, 075)" />
+          <div class="hits" id="manualHits"></div>
+        </div>
       </div>
     </div>
 
