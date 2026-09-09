@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Pokecardex Scaffold</string>
+	<string>Pokecardex Scanner Mvp</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>pokecardex_scaffold</string>
+	<string>pokecardex_scanner_mvp</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,6 +28,12 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Usado para escanear suas cartas físicas de Pokémon TCG.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Usado para conectar com as ferramentas de desenvolvimento do Flutter durante o debug.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartobservatory._tcp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

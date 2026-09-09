@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -90,7 +91,7 @@ class CameraImageConverter {
     );
   }
 
-  static List<int> _yuv420ToNv21({
+  static Uint8List _yuv420ToNv21({
     required int width,
     required int height,
     required Plane yPlane,
@@ -99,7 +100,7 @@ class CameraImageConverter {
   }) {
     final ySize = width * height;
     final uvSize = width * height ~/ 2;
-    final nv21 = List<int>.filled(ySize + uvSize, 0);
+    final nv21 = Uint8List(ySize + uvSize);
 
     // Plano Y: copia linha a linha respeitando o stride (bytesPerRow pode
     // ser maior que width por padding).

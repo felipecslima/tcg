@@ -21,6 +21,8 @@ class _SetSelectionScreenState extends State<SetSelectionScreen> {
   List<TcgSetBrief>? _sets;
   String? _error;
   bool _loadingCards = false;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _SetSelectionScreenState extends State<SetSelectionScreen> {
   @override
   void dispose() {
     _api.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -88,6 +91,7 @@ class _SetSelectionScreenState extends State<SetSelectionScreen> {
       body: Column(
         children: [
           _buildLanguagePicker(),
+          _buildSearchField(),
           const Divider(height: 1),
           Expanded(child: _buildSetList()),
         ],
@@ -102,18 +106,45 @@ class _SetSelectionScreenState extends State<SetSelectionScreen> {
         children: [
           const Text('Idioma das cartas:'),
           const SizedBox(width: 12),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'en', label: Text('Inglês')),
-              ButtonSegment(value: 'pt', label: Text('Português')),
-            ],
-            selected: {_language},
-            onSelectionChanged: (selection) {
-              setState(() => _language = selection.first);
-              _loadSets();
-            },
+          Expanded(
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'en', label: Text('Inglês')),
+                ButtonSegment(value: 'pt', label: Text('Português')),
+              ],
+              selected: {_language},
+              onSelectionChanged: (selection) {
+                setState(() => _language = selection.first);
+                _loadSets();
+              },
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Buscar coleção...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          isDense: true,
+        ),
+        onChanged: (value) => setState(() => _searchQuery = value),
       ),
     );
   }
@@ -137,10 +168,17 @@ class _SetSelectionScreenState extends State<SetSelectionScreen> {
         ),
       );
     }
+    final query = _searchQuery.trim().toLowerCase();
+    final filteredSets = query.isEmpty
+        ? _sets!
+        : _sets!.where((s) => s.name.toLowerCase().contains(query)).toList();
+    if (filteredSets.isEmpty) {
+      return const Center(child: Text('Nenhuma coleção encontrada.'));
+    }
     return ListView.builder(
-      itemCount: _sets!.length,
+      itemCount: filteredSets.length,
       itemBuilder: (context, index) {
-        final set = _sets![index];
+        final set = filteredSets[index];
         return ListTile(
           leading: set.logoUrl != null
               ? Image.network(set.logoUrl!, width: 48, errorBuilder: (_, __, ___) => const Icon(Icons.style))

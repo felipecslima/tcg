@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -66,6 +67,25 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     _initCamera();
   }
 
+  // O iOS (e o Android) suspendem a captura da câmera quando o app sai de
+  // foreground — a tela apaga, você troca de app pra pegar a próxima carta,
+  // etc. Sem isso, ao voltar pro app o stream fica morto e o scanner para
+  // de reconhecer qualquer coisa, mesmo a UI parecendo normal.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _processingTimer?.cancel();
+      _processingTimer = null;
+      setState(() => _controller = null);
+      controller.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      _initCamera();
+    }
+  }
+
   Future<void> _initCamera() async {
     try {
       final cameras = await availableCameras();
@@ -79,12 +99,15 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
       );
       final controller = CameraController(
         backCamera,
-        ResolutionPreset.medium,
+        ResolutionPreset.high,
         enableAudio: false,
-        // YUV420 no Android / BGRA8888 no iOS — o que CameraImageConverter espera.
-        imageFormatGroup: ImageFormatGroup.yuv420,
+        // Android entrega YUV420 planar (3 planos); pedir yuv420 no iOS na
+        // verdade retorna YUV420 bi-planar (2 planos), que CameraImageConverter
+        // não sabe converter — por isso forçamos BGRA8888 (single-plane) lá.
+        imageFormatGroup: Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
       );
       await controller.initialize();
+      await controller.setFocusMode(FocusMode.auto);
       if (!mounted) return;
       setState(() => _controller = controller);
       await controller.startImageStream((image) => _latestFrame = image);
@@ -157,11 +180,24 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
 
   Future<void> _finishSession() async {
     _processingTimer?.cancel();
-    await _controller?.stopImageStream();
+    final controller = _controller;
+    if (controller != null && controller.value.isStreamingImages) {
+      await controller.stopImageStream();
+    }
     if (!mounted) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ReviewScreen(session: _session)),
     );
+    // Voltou da revisão (botão "voltar") em vez de fechar a sessão — retoma
+    // o scan de onde parou.
+    if (!mounted) return;
+    final resumedController = _controller;
+    if (resumedController != null &&
+        resumedController.value.isInitialized &&
+        !resumedController.value.isStreamingImages) {
+      await resumedController.startImageStream((image) => _latestFrame = image);
+      _processingTimer = Timer.periodic(_tickInterval, (_) => _processLatestFrame());
+    }
   }
 
   @override
@@ -208,7 +244,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.camera_off, color: Colors.red, size: 64),
+              const Icon(Icons.videocam_off, color: Colors.red, size: 64),
               const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -234,9 +270,13 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
       return const Center(child: CircularProgressIndicator());
     }
     return Stack(
-      fit: StackFit.expand,
       children: [
-        CameraPreview(controller),
+        Center(
+          child: AspectRatio(
+            aspectRatio: 1 / controller.value.aspectRatio,
+            child: CameraPreview(controller),
+          ),
+        ),
         if (_lastRecognizedPreview != null)
           Positioned(
             left: 12,
@@ -257,10 +297,12 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
             ),
           ),
         if (_isPaused)
-          Container(
-            color: Colors.black54,
-            alignment: Alignment.center,
-            child: const Text('Pausado', style: TextStyle(color: Colors.white, fontSize: 24)),
+          Positioned.fill(
+            child: Container(
+              color: Colors.black54,
+              alignment: Alignment.center,
+              child: const Text('Pausado', style: TextStyle(color: Colors.white, fontSize: 24)),
+            ),
           ),
       ],
     );
