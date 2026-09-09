@@ -1,0 +1,48 @@
+{
+  "setId": "sv04.5",
+  "setName": "Scarlet & Violet: Temporal Forces",
+  "language": "en",
+  "scannedAt": "2026-09-09T14:32:45.123456Z",
+  "scanned": [
+    {
+      "cardId": "sv04.5-001",
+      "name": "Pikachu",
+      "localId": "001",
+      "count": 2
+    },
+    {
+      "cardId": "sv04.5-025",
+      "name": "Charizard ex",
+      "localId": "025",
+      "count": 1
+    },
+    {
+      "cardId": "sv04.5-039",
+      "name": "Articuno ex",
+      "localId": "039",
+      "count": 1
+    },
+    {
+      "cardId": "sv04.5-050",
+      "name": "Zapdos",
+      "localId": "050",
+      "count": 1
+    },
+    {
+      "cardId": "sv04.5-087",
+      "name": "Energy Switch",
+      "localId": "087",
+      "count": 3
+    }
+  ],
+  "pending": [
+    {
+      "rawText": "Blastoise\nHP 120\nBasic Pokémon",
+      "scannedAt": "2026-09-09T14:31:15.456789Z"
+    },
+    {
+      "rawText": "Dragonite\n140 HP",
+      "scannedAt": "2026-09-09T14:31:42.789012Z"
+    }
+  ]
+}

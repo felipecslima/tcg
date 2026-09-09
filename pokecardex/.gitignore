@@ -1,0 +1,122 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# iOS/macOS
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*.xcconfig
+**/ios/**/*.xcworkspace/contents.xcworkspacedata
+**/ios/**/.generated/
+**/ios/**/.symlinks/
+**/ios/**/.xcode.env
+**/ios/**/.xcode.env.defaults
+**/ios/**/Flutter/Flutter.framework
+**/ios/**/Flutter/Flutter.podspec
+**/ios/**/Flutter/Generated.xcconfig
+**/ios/**/Flutter/ephemeral/
+**/ios/**/Flutter/app.flx
+**/ios/**/Flutter/app.zip
+**/ios/**/Flutter/flutter_assets/
+**/ios/**/Flutter/flutter_export_environment.sh
+**/ios/**/Flutter/local.properties
+**/ios/**/Flutter/.last_build_id
+**/ios/**/.dart_tool/
+**/ios/**/.gradle/
+**/ios/**/.idea/
+**/ios/**/.project
+**/ios/**/.properties
+**/ios/**/.classpath
+**/ios/**/.c9/
+**/ios/**/*.launch
+**/ios/**/*.sublime-workspace
+**/ios/**/*.sublime-project
+**/ios/**/out/
+**/ios/**/Mon.db
+**/ios/**/Mon.lock
+**/ios/**/Pods/
+**/ios/**/Podfile.lock
+**/ios/**/XCConfig.json
+
+# Android/studio
+**/android/**/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/r.json
+**/android/**/.gradle/
+**/android/**/.idea/
+**/android/**/captures/
+**/android/**/.gitignore
+**/android/**/gradle-wrapper.jar
+**/android/**/gradle-wrapper.properties
+**/android/**/gradlew
+**/android/**/gradlew.bat
+**/android/**/local.properties
+**/android/**/.gradle
+**/android/**/build/
+**/android/**/.idea/workspace.xml
+**/android/**/.idea/libraries
+**/android/**/.idea/modules.xml
+**/android/**/.idea/misc.xml
+**/android/**/.idea/inspectionProfiles/
+**/android/**/.idea/caches/
+**/android/**/.idea/encodings.xml
+**/android/**/.idea/gradle.xml
+**/android/**/.idea/navEditor.xml
+**/android/**/.idea/runConfigurations.xml
+**/android/**/.idea/vcs.xml
+**/android/**/.classpath
+**/android/**/.c9/
+**/android/**/*.launch
+**/android/**/*.sublime-workspace
+**/android/**/*.sublime-project
+**/android/**/out/
+**/android/**/Mon.db
+**/android/**/Mon.lock
+
+# Web
+lib/generated_plugin_registrant.dart
+
+# Coverage
+coverage/
+
+# Exceptions to above rules.
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
