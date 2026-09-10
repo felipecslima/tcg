@@ -94,8 +94,12 @@ Sem o `--dart-define-from-file`, o app abre em `_MissingConfig`.
 3. ~~**Edge Functions de sync**~~ ✅ **FEITO (2026-09-10).** `sync-sets`,
    `sync-set-cards`, `refresh-prices` deployadas (`verify_jwt=false` + header
    `x-sync-key` em `public.sync_config`), schedules `pg_cron` ativos (03:00/03:15/
-   03:30 BRT via `private_sync_invoke`). Código em `supabase/functions/`,
-   migrations 07–10 em `supabase/migrations/`, doc em
+   03:30 BRT via `private_sync_invoke`). ⚠️ A 1ª execução real do cron
+   (`refresh-prices`, 06:30 UTC 2026-09-10) **falhou** — overload ambíguo de
+   `private_sync_invoke`. Corrigido na **migration 11** (só a assinatura de 2
+   args) e os 3 endpoints rechamados à mão com sucesso (200). Próxima janela
+   automática: 06:00 UTC do dia seguinte. Código em `supabase/functions/`,
+   migrations 07–11 em `supabase/migrations/`, doc em
    `supabase/functions/README.md`. Testadas de ponta a ponta: `sets` tem os
    218 sets + fila; `sync-set-cards` baixou 3 sets de teste (167 cartas brief);
    `refresh-prices` puxou preço da Charizard base1-4 (3 linhas em `card_prices`,
