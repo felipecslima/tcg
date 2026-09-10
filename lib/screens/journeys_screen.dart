@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Card;
 
-import '../repositories/card_repository.dart';
 import '../repositories/collection_repository.dart';
 import '../repositories/pokedex_repository.dart';
 import '../theme/app_colors.dart';
@@ -20,7 +19,6 @@ class JourneysScreen extends StatefulWidget {
 
 class _JourneysScreenState extends State<JourneysScreen> {
   final _pokedexRepo = PokedexRepository();
-  final _cardRepo = CardRepository();
   final _collectionRepo = CollectionRepository();
 
   List<_RegionProgress>? _regions;
@@ -40,26 +38,18 @@ class _JourneysScreenState extends State<JourneysScreen> {
       _error = null;
     });
     try {
-      final regions = await _pokedexRepo.fetchRegions();
-      final ownedIds = await _collectionRepo.fetchAllOwnedCardIds();
+      final regionsFuture = _pokedexRepo.fetchRegions();
+      final ownedDexFuture = _collectionRepo.fetchOwnedNationalDexIds();
+      final regions = await regionsFuture;
+      final ownedDexIds = await ownedDexFuture;
 
       final result = <_RegionProgress>[];
       for (final r in regions) {
-        final cards = await _cardRepo.fetchCardsByDexRange(r.dexStart, r.dexEnd);
-        final uniqueDex = <int>{};
-        final ownedDex = <int>{};
-        for (final c in cards) {
-          for (final dex in c.nationalDexIds) {
-            if (dex >= r.dexStart && dex <= r.dexEnd) {
-              uniqueDex.add(dex);
-              if (ownedIds.contains(c.id)) ownedDex.add(dex);
-            }
-          }
-        }
+        final owned = ownedDexIds.where((d) => d >= r.dexStart && d <= r.dexEnd).length;
         result.add(_RegionProgress(
           region: r,
           totalPokemon: r.dexEnd - r.dexStart + 1,
-          ownedPokemon: ownedDex.length,
+          ownedPokemon: owned,
         ));
       }
 
@@ -113,6 +103,7 @@ class _JourneysScreenState extends State<JourneysScreen> {
   }
 
   void _openRegion(_RegionProgress rp) {
+    if (rp.ownedPokemon == 0) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => RegionCardsScreen(region: rp.region),
     ));
@@ -230,61 +221,64 @@ class _TrailNode extends StatelessWidget {
     final started = rp.ownedPokemon > 0;
     final pct = (rp.progress * 100).round();
     return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        height: 80,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: Center(
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: started ? AppColors.gradNode : null,
-                    color: started ? null : AppColors.surfaceSunken,
-                    border: started ? null : Border.all(color: AppColors.border2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$pct%',
-                      style: AppType.mono.copyWith(
-                        fontSize: 11,
-                        color: started ? Colors.white : AppColors.text4,
+      onTap: started ? onTap : null,
+      child: Opacity(
+        opacity: started ? 1.0 : 0.5,
+        child: SizedBox(
+          height: 80,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 60,
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: started ? AppColors.gradNode : null,
+                      color: started ? null : AppColors.surfaceSunken,
+                      border: started ? null : Border.all(color: AppColors.border2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$pct%',
+                        style: AppType.mono.copyWith(
+                          fontSize: 11,
+                          color: started ? Colors.white : AppColors.text4,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadii.lg),
-                  border: Border.all(color: AppColors.border1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(rp.region.name, style: AppType.listTitle),
-                    const SizedBox(height: 6),
-                    ProgressBar(value: rp.progress, height: 5),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${rp.ownedPokemon}/${rp.totalPokemon} Pokémon',
-                      style: AppType.caption,
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    border: Border.all(color: AppColors.border1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(rp.region.name, style: AppType.listTitle),
+                      const SizedBox(height: 6),
+                      ProgressBar(value: rp.progress, height: 5),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${rp.ownedPokemon}/${rp.totalPokemon} Pokémon',
+                        style: AppType.caption,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -304,36 +298,39 @@ class _ListView extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: GestureDetector(
-              onTap: () => onTap(rp),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadii.xl),
-                  border: Border.all(color: AppColors.border1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(rp.region.name, style: AppType.listTitle)),
-                        Text(
-                          '${(rp.progress * 100).round()}%',
-                          style: AppType.mono.copyWith(
-                            color: rp.progress > 0 ? AppColors.primary : AppColors.text4,
+              onTap: rp.ownedPokemon > 0 ? () => onTap(rp) : null,
+              child: Opacity(
+                opacity: rp.ownedPokemon > 0 ? 1.0 : 0.5,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadii.xl),
+                    border: Border.all(color: AppColors.border1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text(rp.region.name, style: AppType.listTitle)),
+                          Text(
+                            '${(rp.progress * 100).round()}%',
+                            style: AppType.mono.copyWith(
+                              color: rp.progress > 0 ? AppColors.primary : AppColors.text4,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ProgressBar(value: rp.progress),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${rp.ownedPokemon}/${rp.totalPokemon} Pokémon',
-                      style: AppType.caption,
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ProgressBar(value: rp.progress),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${rp.ownedPokemon}/${rp.totalPokemon} Pokémon',
+                        style: AppType.caption,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

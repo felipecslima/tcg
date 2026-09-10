@@ -97,11 +97,33 @@ class SupabasePokedexStore implements PokedexStore {
   }
 }
 
+/// Fallback estático das 9 regiões — dados que nunca mudam, evitam depender
+/// da tabela `regions` estar populada via seed.
+const kRegionsFallback = [
+  RegionBrief(id: 'kanto', name: 'Kanto', generation: 1, dexStart: 1, dexEnd: 151, sortOrder: 1),
+  RegionBrief(id: 'johto', name: 'Johto', generation: 2, dexStart: 152, dexEnd: 251, sortOrder: 2),
+  RegionBrief(id: 'hoenn', name: 'Hoenn', generation: 3, dexStart: 252, dexEnd: 386, sortOrder: 3),
+  RegionBrief(id: 'sinnoh', name: 'Sinnoh', generation: 4, dexStart: 387, dexEnd: 493, sortOrder: 4),
+  RegionBrief(id: 'unova', name: 'Unova', generation: 5, dexStart: 494, dexEnd: 649, sortOrder: 5),
+  RegionBrief(id: 'kalos', name: 'Kalos', generation: 6, dexStart: 650, dexEnd: 721, sortOrder: 6),
+  RegionBrief(id: 'alola', name: 'Alola', generation: 7, dexStart: 722, dexEnd: 809, sortOrder: 7),
+  RegionBrief(id: 'galar', name: 'Galar', generation: 8, dexStart: 810, dexEnd: 905, sortOrder: 8),
+  RegionBrief(id: 'paldea', name: 'Paldea', generation: 9, dexStart: 906, dexEnd: 1025, sortOrder: 9),
+];
+
+/// Retorna a região à qual um national dex id pertence, ou null.
+RegionBrief? regionForDex(int dexId) {
+  for (final r in kRegionsFallback) {
+    if (dexId >= r.dexStart && dexId <= r.dexEnd) return r;
+  }
+  return null;
+}
+
 /// Pokédex e regiões — `pokedex`/`regions` já vêm totalmente populados pela
 /// carga inicial (PokéAPI, feita via seed, não neste app). TTL é
 /// praticamente infinito: não há cliente de PokéAPI no Flutter hoje, então
 /// este repositório só lê a base; se algum dia vier vazio (banco novo sem
-/// seed), o certo é rodar a Edge Function `seed-pokedex`, não buscar da UI.
+/// seed), usa o fallback estático em Dart.
 class PokedexRepository {
   PokedexRepository({PokedexStore? store})
       : _store = store ?? SupabasePokedexStore(Supabase.instance.client);
@@ -110,6 +132,7 @@ class PokedexRepository {
 
   Future<List<RegionBrief>> fetchRegions() async {
     final rows = await _store.fetchRegions();
+    if (rows.isEmpty) return List.unmodifiable(kRegionsFallback);
     return rows.map(RegionBrief.fromSupabaseRow).toList();
   }
 

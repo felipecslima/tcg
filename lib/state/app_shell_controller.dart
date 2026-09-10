@@ -14,9 +14,27 @@ class AppShellController extends ChangeNotifier {
   String? toastMessage;
   Timer? _toastTimer;
 
+  int collectionGeneration = 0;
+
+  // --- Batch mode (persiste entre trocas de aba) ---
+  bool batchMode = false;
+
+  // --- Idioma de scan (persiste entre trocas de aba) ---
+  String scanLanguage = 'pt';
+
+  void toggleScanLanguage() {
+    scanLanguage = scanLanguage == 'pt' ? 'en' : 'pt';
+    notifyListeners();
+  }
+
+  void toggleBatchMode() {
+    batchMode = !batchMode;
+    notifyListeners();
+  }
+
   // --- Set selecionado para scan ---
   CardSetBrief? selectedSet;
-  bool openUniverse = false;
+  bool openUniverse = true;
 
   void selectSet(CardSetBrief set) {
     selectedSet = set;
@@ -47,6 +65,7 @@ class AppShellController extends ChangeNotifier {
   void goToCollectionWithToast(String message) {
     tabIndex = 0;
     toastMessage = message;
+    collectionGeneration++;
     notifyListeners();
     _toastTimer?.cancel();
     _toastTimer = Timer(_toastDuration, () {

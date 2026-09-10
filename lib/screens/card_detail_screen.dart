@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart' hide Card;
 
 import '../models/card.dart';
-import '../models/card_detail.dart' show CardAttack;
+import '../models/card_detail.dart' show CardAttack, CardmarketPrice, MarketPricing;
 import '../repositories/card_repository.dart';
 import '../repositories/collection_repository.dart';
+import '../services/fx_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
@@ -18,11 +19,13 @@ class CardDetailScreen extends StatefulWidget {
     required this.card,
     this.entry,
     this.origin = 'Voltar',
+    this.language,
   });
 
   final Card card;
   final CollectionCardEntry? entry;
   final String origin;
+  final String? language;
 
   @override
   State<CardDetailScreen> createState() => _CardDetailScreenState();
@@ -33,36 +36,45 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
   bool _loading = false;
   bool _detailLoaded = false;
   String? _error;
+  FxRates? _fx;
 
   @override
   void initState() {
     super.initState();
     _card = widget.card;
-    if (_card.isBrief) {
-      _fetchDetail();
-    } else {
-      _detailLoaded = true;
-    }
+    _detailLoaded = !_card.isBrief;
+    _fetchDetail();
+    _loadFx();
+  }
+
+  Future<void> _loadFx() async {
+    final fx = await FxService.load();
+    if (mounted && fx != null) setState(() => _fx = fx);
   }
 
   Future<void> _fetchDetail() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (_card.isBrief) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
-      final detail = await CardRepository().fetchCardDetail(_card.id);
+      final lang = widget.language ?? widget.entry?.language ?? 'pt';
+      final detail = await CardRepository().fetchCardDetail(_card.id, language: lang);
       if (!mounted) return;
       setState(() {
         _card = detail.copyWith(priceBrl: widget.card.priceBrl);
         _loading = false;
         _detailLoaded = true;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = '$e';
         _loading = false;
+        if (!_detailLoaded) _detailLoaded = _card.rarity != null;
       });
     }
   }
@@ -79,6 +91,8 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
               origin: widget.origin,
               loading: _loading,
               detailLoaded: _detailLoaded,
+              fx: _fx,
+              language: widget.language ?? widget.entry?.language ?? 'pt',
             ),
     );
   }
@@ -91,6 +105,8 @@ class _DetailBody extends StatelessWidget {
     required this.origin,
     this.loading = false,
     this.detailLoaded = false,
+    this.fx,
+    this.language = 'pt',
   });
 
   final Card card;
@@ -98,6 +114,8 @@ class _DetailBody extends StatelessWidget {
   final String origin;
   final bool loading;
   final bool detailLoaded;
+  final FxRates? fx;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -126,12 +144,33 @@ class _DetailBody extends StatelessWidget {
                 const Center(child: CircularProgressIndicator()),
               ],
               if (detailLoaded) ...[
+                const SizedBox(height: 14),
+                _ChipsRow(card: card, language: language),
+                if (card.nationalDexIds.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _NationalDexBadge(dexIds: card.nationalDexIds),
+                ],
                 if (card.attacks.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   _AttacksCard(attacks: card.attacks, hp: card.hp),
                 ],
                 const SizedBox(height: 20),
-                _StatsGrid(card: card, entry: entry),
+                _CardInfoCard(card: card),
+                if (entry != null) ...[
+                  const SizedBox(height: 20),
+                  _CollectionCard(card: card, entry: entry!),
+                ],
+                if (card.pricing != null && !card.pricing!.isEmpty) ...[
+                  const SizedBox(height: 20),
+                  _PricingCard(pricing: card.pricing!, fx: fx, fallbackBrl: card.priceBrl),
+                ] else if (card.priceBrl != null) ...[
+                  const SizedBox(height: 20),
+                  _PricingCard(
+                    pricing: MarketPricing(),
+                    fx: fx,
+                    fallbackBrl: card.priceBrl,
+                  ),
+                ],
               ],
             ],
           ),
@@ -385,10 +424,99 @@ class _EnergyCost extends StatelessWidget {
   }
 }
 
-class _StatsGrid extends StatelessWidget {
-  const _StatsGrid({required this.card, this.entry});
+class _CardInfoCard extends StatelessWidget {
+  const _CardInfoCard({required this.card});
   final Card card;
-  final CollectionCardEntry? entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeVariants = card.variants.entries
+        .where((e) => e.value)
+        .map((e) => _variantLabel(e.key))
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.border1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SOBRE A CARTA', style: AppType.sectionLabel),
+          const SizedBox(height: 14),
+          if (card.setName.isNotEmpty)
+            _InfoRow(label: 'Set', value: card.setName),
+          if (card.localId.isNotEmpty)
+            _InfoRow(
+              label: 'Número',
+              value: card.printedTotal > 0
+                  ? '${card.localId} / ${card.printedTotal}'
+                  : card.localId,
+            ),
+          if (card.rarity != null)
+            _InfoRow(label: 'Raridade', value: card.rarity!, valueColor: AppColors.gold),
+          if (card.category != null)
+            _InfoRow(label: 'Categoria', value: card.category!),
+          if (card.stage != null)
+            _InfoRow(label: 'Estágio', value: card.stage!),
+          if (card.hp != null)
+            _InfoRow(label: 'HP', value: '${card.hp}'),
+          if (card.types.isNotEmpty)
+            _InfoRow(label: 'Tipo', value: card.types.join(', ')),
+          if (card.weaknesses.isNotEmpty)
+            _InfoRow(
+              label: 'Fraqueza',
+              value: card.weaknesses
+                  .map((w) => '${w.type} ${w.value ?? ''}'.trim())
+                  .join(', '),
+            ),
+          if (card.retreat != null)
+            _InfoRow(label: 'Recuo', value: '${'●' * card.retreat!} (${card.retreat})'),
+          if (card.regulationMark != null)
+            _InfoRow(label: 'Regulação', value: card.regulationMark!),
+          if (activeVariants.isNotEmpty)
+            _InfoRow(label: 'Variantes', value: activeVariants.join(', ')),
+          if (card.illustrator != null) ...[
+            const SizedBox(height: 6),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.brush_outlined, size: 14, color: AppColors.text3),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    card.illustrator!,
+                    style: AppType.bodySm.copyWith(color: AppColors.text2),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _variantLabel(String key) {
+    switch (key) {
+      case 'normal': return 'Normal';
+      case 'holo': return 'Holo';
+      case 'reverse': return 'Reverse Holo';
+      case 'firstEdition': return '1ª Edição';
+      case 'wPromo': return 'Promo';
+      default: return key;
+    }
+  }
+}
+
+class _CollectionCard extends StatelessWidget {
+  const _CollectionCard({required this.card, required this.entry});
+  final Card card;
+  final CollectionCardEntry entry;
 
   @override
   Widget build(BuildContext context) {
@@ -402,21 +530,24 @@ class _StatsGrid extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('DETALHES', style: AppType.sectionLabel),
+          Text('SUA COLEÇÃO', style: AppType.sectionLabel),
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: _StatCell(
-                  label: 'Você tem',
-                  value: entry != null ? '${entry!.quantity}x' : '—',
-                ),
-              ),
+              Expanded(child: _StatCell(label: 'Quantidade', value: '${entry.quantity}x')),
+              const SizedBox(width: 12),
+              Expanded(child: _StatCell(label: 'Estado', value: entry.condition)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _StatCell(label: 'Acabamento', value: _finishLabel(entry.finish))),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCell(
-                  label: 'Estado',
-                  value: entry?.condition ?? '—',
+                  label: 'Idioma',
+                  value: CollectionCardEntry.languageLabel(entry.language),
                 ),
               ),
             ],
@@ -426,13 +557,6 @@ class _StatsGrid extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCell(
-                  label: 'Acabamento',
-                  value: _finishLabel(entry?.finish),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCell(
                   label: 'Valor estimado',
                   value: card.priceBrl != null
                       ? 'R\$ ${card.priceBrl!.toStringAsFixed(2)}'
@@ -440,30 +564,10 @@ class _StatsGrid extends StatelessWidget {
                   valueColor: card.priceBrl != null ? AppColors.gold : null,
                 ),
               ),
+              const SizedBox(width: 12),
+              const Expanded(child: SizedBox()),
             ],
           ),
-          if (card.weaknesses.isNotEmpty || card.retreat != null) ...[
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            if (card.weaknesses.isNotEmpty)
-              Text(
-                'Fraqueza: ${card.weaknesses.map((w) => '${w.type} ${w.value ?? ''}'.trim()).join(', ')}',
-                style: AppType.bodySm.copyWith(color: AppColors.text3),
-              ),
-            if (card.retreat != null)
-              Text(
-                'Custo de recuo: ${card.retreat}',
-                style: AppType.bodySm.copyWith(color: AppColors.text3),
-              ),
-          ],
-          if (card.illustrator != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Ilustração: ${card.illustrator}',
-              style: AppType.caption,
-            ),
-          ],
         ],
       ),
     );
@@ -471,15 +575,43 @@ class _StatsGrid extends StatelessWidget {
 
   static String _finishLabel(String? finish) {
     switch (finish) {
-      case 'holo':
-        return 'Holo';
-      case 'reverse':
-        return 'Reverse';
-      case 'normal':
-        return 'Normal';
-      default:
-        return finish ?? '—';
+      case 'holo': return 'Holo';
+      case 'reverse': return 'Reverse';
+      case 'normal': return 'Normal';
+      default: return finish ?? '—';
     }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value, this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(label, style: AppType.bodySm.copyWith(color: AppColors.text3)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppType.bodySm.copyWith(
+                color: valueColor ?? AppColors.text1,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -509,6 +641,189 @@ class _StatCell extends StatelessWidget {
               fontSize: 16,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipsRow extends StatelessWidget {
+  const _ChipsRow({required this.card, this.language = 'pt'});
+  final Card card;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <String>[
+      for (final t in card.types) t,
+      if (card.stage != null) card.stage!,
+      if (card.category != null) card.category!,
+      if (card.hp != null) '${card.hp} HP',
+      if (card.regulationMark != null) 'Reg. ${card.regulationMark}',
+    ];
+    final langLabel = CollectionCardEntry.languageLabel(language);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.tint,
+            borderRadius: BorderRadius.circular(AppRadii.chip),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.language, size: 13, color: AppColors.primary),
+              const SizedBox(width: 4),
+              Text(langLabel, style: AppType.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        for (final label in chips)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.tint,
+              borderRadius: BorderRadius.circular(AppRadii.chip),
+            ),
+            child: Text(label, style: AppType.caption.copyWith(color: AppColors.text2)),
+          ),
+      ],
+    );
+  }
+}
+
+class _NationalDexBadge extends StatelessWidget {
+  const _NationalDexBadge({required this.dexIds});
+  final List<int> dexIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = dexIds.length == 1
+        ? 'Pokédex Nacional nº ${dexIds.first}'
+        : 'Pokédex Nacional nº ${dexIds.join(', ')}';
+    return Row(
+      children: [
+        const Icon(Icons.catching_pokemon, size: 16, color: AppColors.text3),
+        const SizedBox(width: 6),
+        Text(label, style: AppType.caption.copyWith(color: AppColors.text3)),
+      ],
+    );
+  }
+}
+
+class _PricingCard extends StatelessWidget {
+  const _PricingCard({required this.pricing, this.fx, this.fallbackBrl});
+  final MarketPricing pricing;
+  final FxRates? fx;
+  final double? fallbackBrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.border1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('PREÇOS DE MERCADO', style: AppType.sectionLabel),
+          const SizedBox(height: 14),
+          if (pricing.cardmarket != null) _cardmarketSection(pricing.cardmarket!),
+          if (pricing.cardmarket != null && pricing.tcgplayer.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+          ],
+          if (pricing.tcgplayer.isNotEmpty) _tcgplayerSection(),
+          if (pricing.cardmarket == null && pricing.tcgplayer.isEmpty && fallbackBrl != null)
+            _PriceLine(label: 'Estimativa', value: formatBrl(fallbackBrl!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _cardmarketSection(CardmarketPrice cm) {
+    final lines = <_PriceLine>[];
+    if (cm.trend != null) lines.add(_PriceLine(label: 'Tendência', value: _fmtPrice(cm.unit, cm.trend!)));
+    if (cm.avg != null) lines.add(_PriceLine(label: 'Média', value: _fmtPrice(cm.unit, cm.avg!)));
+    if (cm.low != null) lines.add(_PriceLine(label: 'Mínimo', value: _fmtPrice(cm.unit, cm.low!)));
+    if (cm.avg7 != null) lines.add(_PriceLine(label: 'Média 7d', value: _fmtPrice(cm.unit, cm.avg7!)));
+    if (cm.avg30 != null) lines.add(_PriceLine(label: 'Média 30d', value: _fmtPrice(cm.unit, cm.avg30!)));
+    if (cm.trendHolo != null) lines.add(_PriceLine(label: 'Holo tendência', value: _fmtPrice(cm.unit, cm.trendHolo!)));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Cardmarket', style: AppType.bodySm.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ...lines,
+      ],
+    );
+  }
+
+  Widget _tcgplayerSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('TCGplayer', style: AppType.bodySm.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        for (final entry in pricing.tcgplayer.entries) ...[
+          Text(_variantLabel(entry.key), style: AppType.caption.copyWith(color: AppColors.text3)),
+          const SizedBox(height: 4),
+          if (entry.value.market != null) _PriceLine(label: 'Market', value: _fmtPrice('USD', entry.value.market!)),
+          if (entry.value.low != null) _PriceLine(label: 'Low', value: _fmtPrice('USD', entry.value.low!)),
+          if (entry.value.mid != null) _PriceLine(label: 'Mid', value: _fmtPrice('USD', entry.value.mid!)),
+          const SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+
+  String _fmtPrice(String unit, double value) {
+    final orig = '${unit == 'EUR' ? '€' : 'US\$'} ${value.toStringAsFixed(2)}';
+    if (fx == null) return orig;
+    final brl = fx!.toBrl(unit, value);
+    return '$orig  (${formatBrl(brl)})';
+  }
+
+  static String _variantLabel(String key) {
+    switch (key) {
+      case 'normal':
+        return 'Normal';
+      case 'holofoil':
+        return 'Holofoil';
+      case 'reverseHolofoil':
+      case 'reverse-holofoil':
+        return 'Reverse Holofoil';
+      case 'firstEdition':
+      case 'first-edition':
+        return '1st Edition';
+      default:
+        return key;
+    }
+  }
+}
+
+class _PriceLine extends StatelessWidget {
+  const _PriceLine({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: AppType.bodySm.copyWith(color: AppColors.text3)),
+          Text(value, style: AppType.mono.copyWith(fontSize: 13, color: AppColors.text1)),
         ],
       ),
     );

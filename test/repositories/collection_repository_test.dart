@@ -23,6 +23,9 @@ class _FakeCollectionStore implements CollectionStore {
   Future<List<String>> fetchAllOwnedCardIds() async => const [];
 
   @override
+  Future<List<int>> fetchOwnedNationalDexIds() async => const [];
+
+  @override
   Future<Map<String, dynamic>> upsertCard({
     required String userId,
     required String collectionId,
@@ -30,6 +33,7 @@ class _FakeCollectionStore implements CollectionStore {
     required String finish,
     required String condition,
     required int quantity,
+    String language = 'pt',
   }) async {
     final call = {
       'userId': userId,
@@ -38,6 +42,7 @@ class _FakeCollectionStore implements CollectionStore {
       'finish': finish,
       'condition': condition,
       'quantity': quantity,
+      'language': language,
     };
     upsertCalls.add(call);
     return call;
@@ -64,7 +69,30 @@ void main() {
       'finish': 'holo',
       'condition': 'NM',
       'quantity': 2,
+      'language': 'pt',
     });
+  });
+
+  test('addCardsBatch grava sequencialmente cada entrada', () async {
+    final store = _FakeCollectionStore();
+    final repo = CollectionRepository(store: store, currentUserId: () => 'user-1');
+
+    final saved = await repo.addCardsBatch(
+      collectionId: 'c1',
+      entries: [
+        (cardId: 'card-a', finish: 'normal', quantity: 1, language: 'pt'),
+        (cardId: 'card-b', finish: 'holo', quantity: 2, language: 'pt'),
+        (cardId: 'card-c', finish: 'reverse', quantity: 1, language: 'en'),
+      ],
+    );
+
+    expect(saved, 3);
+    expect(store.upsertCalls, hasLength(3));
+    expect(store.upsertCalls[0]['cardId'], 'card-a');
+    expect(store.upsertCalls[1]['cardId'], 'card-b');
+    expect(store.upsertCalls[1]['finish'], 'holo');
+    expect(store.upsertCalls[1]['quantity'], 2);
+    expect(store.upsertCalls[2]['finish'], 'reverse');
   });
 
   test('sem sessão logada: recusa em vez de gravar sem user_id', () async {

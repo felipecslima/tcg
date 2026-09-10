@@ -24,9 +24,10 @@ String _finishLabel(String f) => switch (f) {
 /// Estado de conservação NÃO é pedido aqui (decisão de produto travada,
 /// grava com o default do banco, `'NM'`).
 class ConfirmScreen extends StatefulWidget {
-  const ConfirmScreen({super.key, required this.card});
+  const ConfirmScreen({super.key, required this.card, this.language = 'pt'});
 
   final Card card;
+  final String language;
 
   @override
   State<ConfirmScreen> createState() => _ConfirmScreenState();
@@ -85,6 +86,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         cardId: widget.card.id,
         finish: _finish,
         quantity: _qty,
+        language: widget.language,
       );
       if (!mounted) return;
       final destName =

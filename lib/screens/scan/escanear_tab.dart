@@ -2,17 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_shell_controller.dart';
+import '../../state/batch_session.dart';
 import 'scan_view.dart';
 import 'setpick_view.dart';
 
-/// Conteúdo da aba "Escanear" do [AppShell]. Alterna LOCALMENTE entre
-/// Escolher coleção e Escanear (README: as duas mostram a tab bar
-/// flutuante — não são full-screen routes, por isso são sub-views desta
-/// aba, e não `Navigator.push`). Só Candidatos (bottom sheet) e Confirmar
-/// (push de verdade) cobrem a tab bar.
-class EscanearTab extends StatelessWidget {
+class EscanearTab extends StatefulWidget {
   const EscanearTab({super.key});
 
+  @override
+  State<EscanearTab> createState() => _EscanearTabState();
+}
+
+class _EscanearTabState extends State<EscanearTab> {
+  final _batchSession = BatchSession();
+
+  @override
+  void dispose() {
+    _batchSession.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider.value(
+      value: _batchSession,
+      child: _EscanearTabContent(),
+    );
+  }
+}
+
+class _EscanearTabContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<AppShellController>();

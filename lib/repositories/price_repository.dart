@@ -83,10 +83,11 @@ class PriceRepository {
           final cm = pricing.cardmarket;
           String? currency;
           double? market;
-          if (cm?.trend != null) {
-            currency = cm!.unit;
-            market = cm.trend;
-          } else {
+          if (cm != null) {
+            currency = cm.unit;
+            market = cm.avg ?? cm.trend;
+          }
+          if (market == null) {
             final tp = pricing.tcgplayer.values.where((p) => p.market != null).firstOrNull;
             if (tp != null) {
               currency = 'USD';
@@ -101,8 +102,12 @@ class PriceRepository {
               'market': market,
               'fetched_at': DateTime.now().toUtc().toIso8601String(),
             };
-            await _store.insert(newRow);
-            row = await _store.fetchLatest(cardId);
+            try {
+              await _store.insert(newRow);
+            } catch (_) {
+              // RLS pode impedir insert pelo client — sem problema
+            }
+            row = newRow;
           }
         }
       } catch (_) {

@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/pokemon_variations_sheet.dart';
 import 'card_detail_screen.dart';
 
 /// Grade de cartas por região — mostra slots owned (arte) vs missing (silhueta).
@@ -61,9 +62,9 @@ class _RegionCardsScreenState extends State<RegionCardsScreen> {
         final candidates = byDex[dex] ?? [];
         final ownedCard = candidates.where((c) => ownedIds.contains(c.id)).toList();
         if (ownedCard.isNotEmpty) {
-          slots.add(_DexSlot(dexId: dex, card: ownedCard.first, owned: true));
+          slots.add(_DexSlot(dexId: dex, card: ownedCard.first, owned: true, allCards: candidates));
         } else if (candidates.isNotEmpty) {
-          slots.add(_DexSlot(dexId: dex, card: candidates.first, owned: false));
+          slots.add(_DexSlot(dexId: dex, card: candidates.first, owned: false, allCards: candidates));
         } else {
           slots.add(_DexSlot(dexId: dex, card: null, owned: false));
         }
@@ -151,26 +152,42 @@ class _RegionCardsScreenState extends State<RegionCardsScreen> {
         mainAxisSpacing: 10,
       ),
       itemCount: _slots!.length,
-      itemBuilder: (context, i) => _SlotTile(
-        slot: _slots![i],
-        onTap: _slots![i].card != null
-            ? () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => CardDetailScreen(
-                    card: _slots![i].card!,
-                    origin: widget.region.name,
-                  ),
-                ))
-            : null,
-      ),
+      itemBuilder: (context, i) {
+        final slot = _slots![i];
+        return _SlotTile(
+          slot: slot,
+          onTap: slot.card != null
+              ? () {
+                  if (slot.owned) {
+                    showPokemonVariationsSheet(
+                      context: context,
+                      nationalDexId: slot.dexId,
+                      pokemonName: slot.card!.name,
+                      cardRepo: _cardRepo,
+                      collectionRepo: _collectionRepo,
+                    );
+                  } else {
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => CardDetailScreen(
+                        card: slot.card!,
+                        origin: widget.region.name,
+                      ),
+                    ));
+                  }
+                }
+              : null,
+        );
+      },
     );
   }
 }
 
 class _DexSlot {
-  const _DexSlot({required this.dexId, this.card, required this.owned});
+  const _DexSlot({required this.dexId, this.card, required this.owned, this.allCards = const []});
   final int dexId;
   final Card? card;
   final bool owned;
+  final List<Card> allCards;
 }
 
 class _SlotTile extends StatelessWidget {

@@ -40,6 +40,10 @@ class _FakeCardStore implements CardStore {
         final dex = r['national_dex_id'] as int?;
         return dex != null && dex >= start && dex <= end;
       }).toList();
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchByNationalDexId(int dexId) async =>
+      rows.where((r) => (r['national_dex_id'] as int?) == dexId).toList();
 }
 
 T? _firstOrNull<T>(Iterable<T> it) => it.isEmpty ? null : it.first;

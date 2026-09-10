@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/card.dart';
+
 import '../services/tcgdex_api_service.dart';
 import 'api_cache_logger.dart';
 import 'staleness.dart';
@@ -13,6 +14,7 @@ abstract class CardStore {
   Future<void> upsertAll(List<Map<String, dynamic>> rows);
   Future<List<Map<String, dynamic>>> searchByName(String query, {int limit = 20});
   Future<List<Map<String, dynamic>>> fetchByDexRange(int start, int end);
+  Future<List<Map<String, dynamic>>> fetchByNationalDexId(int dexId);
 }
 
 class SupabaseCardStore implements CardStore {
@@ -72,6 +74,16 @@ class SupabaseCardStore implements CardStore {
         .order('national_dex_id');
     return (rows as List).cast<Map<String, dynamic>>();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchByNationalDexId(int dexId) async {
+    final rows = await _client
+        .from('cards')
+        .select('*, sets(name)')
+        .eq('national_dex_id', dexId)
+        .order('set_id');
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
 }
 
 /// Cartas de um set / carta individual — DB-first, TTL 30 dias (catálogo).
@@ -117,28 +129,34 @@ class CardRepository {
     return rows.map(Card.fromSupabaseRow).toList();
   }
 
-  /// Carta com detalhe completo (raridade, ataques, HP). Se a linha na base
-  /// já tem isso e está fresca, não bate na API.
+  /// Carta com detalhe completo (raridade, ataques, HP, pricing).
+  /// Sempre tenta buscar da API para obter todos os campos + pricing
+  /// (transiente). Se a API falha, serve do DB (sem pricing).
   Future<Card> fetchCardDetail(String id, {String language = 'en'}) async {
-    var row = await _store.fetchById(id);
+    final row = await _store.fetchById(id);
     final hasDetail = row != null && row['rarity'] != null;
     final stale = row == null ||
         !hasDetail ||
         isStale(DateTime.tryParse(row['updated_at'] as String? ?? ''), _ttl);
-    if (stale) {
-      try {
-        final detail = await _api.fetchCard(id, language: language);
-        final setId = row?['set_id'] as String?;
-        final card = Card.fromDetail(detail, setId: setId ?? '');
-        await _store.upsertAll([card.toUpsertRow(setId: setId)]);
-        await _cacheLogger.touchFetchLog(
-            source: 'tcgdex', entityType: 'card', entityId: id, ttl: _ttl);
-        row = await _store.fetchById(id);
-      } catch (_) {
-        if (row == null) rethrow; // sem base e sem API: não tem o que servir
+    try {
+      final detail = await _api.fetchCard(id, language: language);
+      final setId = row?['set_id'] as String? ?? '';
+      final card = Card.fromDetail(detail, setId: setId);
+      if (stale) {
+        try {
+          await _store.upsertAll([card.toUpsertRow(setId: setId)]);
+          await _cacheLogger.touchFetchLog(
+              source: 'tcgdex', entityType: 'card', entityId: id, ttl: _ttl);
+        } catch (_) {
+          // DB write failed (e.g. missing column) — não impede de devolver
+          // o card completo que a API retornou.
+        }
       }
+      return card;
+    } catch (e) {
+      if (row == null) rethrow;
+      return Card.fromSupabaseRow(row);
     }
-    return Card.fromSupabaseRow(row!);
   }
 
   /// Busca textual por nome (ilike) — usada pela tela de Busca.
@@ -150,6 +168,12 @@ class CardRepository {
   /// Cartas cujo national_dex_id está no range da região — usada por Jornadas.
   Future<List<Card>> fetchCardsByDexRange(int start, int end) async {
     final rows = await _store.fetchByDexRange(start, end);
+    return rows.map(Card.fromSupabaseRow).toList();
+  }
+
+  /// Todas as variações de carta para um Pokémon (mesmo national_dex_id).
+  Future<List<Card>> fetchCardsForPokemon(int nationalDexId) async {
+    final rows = await _store.fetchByNationalDexId(nationalDexId);
     return rows.map(Card.fromSupabaseRow).toList();
   }
 }

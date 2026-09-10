@@ -34,6 +34,7 @@ class CollectionCardEntry {
     required this.finish,
     required this.condition,
     required this.quantity,
+    this.language = 'pt',
   });
 
   final String id;
@@ -42,6 +43,7 @@ class CollectionCardEntry {
   final String finish; // normal / reverse / holo
   final String condition; // NM, LP, ...
   final int quantity;
+  final String language; // pt / en / es / fr / de / it / ja
 
   factory CollectionCardEntry.fromSupabaseRow(Map<String, dynamic> row) => CollectionCardEntry(
         id: row['id'] as String,
@@ -50,7 +52,21 @@ class CollectionCardEntry {
         finish: row['finish'] as String? ?? 'normal',
         condition: row['condition'] as String? ?? 'NM',
         quantity: row['quantity'] as int? ?? 1,
+        language: row['language'] as String? ?? 'pt',
       );
+
+  static String languageLabel(String lang) {
+    switch (lang) {
+      case 'pt': return 'Portugues';
+      case 'en': return 'English';
+      case 'es': return 'Espanol';
+      case 'fr': return 'Francais';
+      case 'de': return 'Deutsch';
+      case 'it': return 'Italiano';
+      case 'ja': return 'Japones';
+      default: return lang.toUpperCase();
+    }
+  }
 }
 
 /// Abstração fina sobre `collections`/`collection_cards` — permite fake em
@@ -63,6 +79,7 @@ abstract class CollectionStore {
   Future<List<String>> fetchOwnedCardIds(List<String> cardIds);
   Future<List<Map<String, dynamic>>> fetchOwnedQuantities(List<String> cardIds);
   Future<List<String>> fetchAllOwnedCardIds();
+  Future<List<int>> fetchOwnedNationalDexIds();
   Future<Map<String, dynamic>> upsertCard({
     required String userId,
     required String collectionId,
@@ -70,6 +87,7 @@ abstract class CollectionStore {
     required String finish,
     required String condition,
     required int quantity,
+    String language = 'pt',
   });
 }
 
@@ -87,7 +105,7 @@ class SupabaseCollectionStore implements CollectionStore {
   Future<List<Map<String, dynamic>>> fetchCollectionCards(String collectionId) async {
     final rows = await _client
         .from('collection_cards')
-        .select('*, cards(*)')
+        .select('*, cards(*, sets(name))')
         .eq('collection_id', collectionId)
         .order('added_at', ascending: false);
     return (rows as List).cast<Map<String, dynamic>>();
@@ -123,6 +141,21 @@ class SupabaseCollectionStore implements CollectionStore {
     return (rows as List).map((r) => r['card_id'] as String).toSet().toList();
   }
 
+  @override
+  Future<List<int>> fetchOwnedNationalDexIds() async {
+    final rows = await _client
+        .from('collection_cards')
+        .select('cards!inner(national_dex_id)')
+        .not('cards.national_dex_id', 'is', null);
+    final ids = <int>{};
+    for (final r in (rows as List)) {
+      final card = r['cards'] as Map<String, dynamic>?;
+      final dex = card?['national_dex_id'] as int?;
+      if (dex != null) ids.add(dex);
+    }
+    return ids.toList();
+  }
+
   /// Chama `upsert_collection_card` (migration `12_collection_cards_upsert`)
   /// — insert + `ON CONFLICT (collection_id, card_id, finish, condition) DO
   /// UPDATE quantity = quantity + excluded.quantity`, atômico no banco. Sem
@@ -136,6 +169,7 @@ class SupabaseCollectionStore implements CollectionStore {
     required String finish,
     required String condition,
     required int quantity,
+    String language = 'pt',
   }) async {
     final row = await _client.rpc('upsert_collection_card', params: {
       'p_user_id': userId,
@@ -144,6 +178,7 @@ class SupabaseCollectionStore implements CollectionStore {
       'p_finish': finish,
       'p_condition': condition,
       'p_quantity': quantity,
+      'p_language': language,
     });
     return row as Map<String, dynamic>;
   }
@@ -201,14 +236,37 @@ class CollectionRepository {
     return map;
   }
 
-  /// Adiciona (ou soma quantidade a) uma carta num binder — o "Salvar na
-  /// coleção" da tela Confirmar.
+  /// National dex IDs distintos que a usuária possui (qualquer binder).
+  Future<Set<int>> fetchOwnedNationalDexIds() async {
+    final ids = await _store.fetchOwnedNationalDexIds();
+    return ids.toSet();
+  }
+
+  Future<int> addCardsBatch({
+    required String collectionId,
+    required List<({String cardId, String finish, int quantity, String language})> entries,
+  }) async {
+    var saved = 0;
+    for (final e in entries) {
+      await addCardToCollection(
+        collectionId: collectionId,
+        cardId: e.cardId,
+        finish: e.finish,
+        quantity: e.quantity,
+        language: e.language,
+      );
+      saved++;
+    }
+    return saved;
+  }
+
   Future<void> addCardToCollection({
     required String collectionId,
     required String cardId,
     required String finish,
     String condition = 'NM',
     int quantity = 1,
+    String language = 'pt',
   }) async {
     final userId = _currentUserId();
     if (userId == null) {
@@ -221,6 +279,7 @@ class CollectionRepository {
       finish: finish,
       condition: condition,
       quantity: quantity.clamp(1, 99),
+      language: language,
     );
   }
 }

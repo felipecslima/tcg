@@ -129,7 +129,6 @@ class TcgdexApiService {
           jsonDecode(response.body) as Map<String, dynamic>);
     } catch (e) {
       if (disk != null) {
-        // rede fora do ar: melhor o disco velho que nada
         return _cardMem[key] = CardDetail.fromJson(disk.json);
       }
       rethrow;

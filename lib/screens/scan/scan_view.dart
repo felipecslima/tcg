@@ -14,10 +14,14 @@ import '../../repositories/set_repository.dart';
 import '../../services/camera_image_converter.dart';
 import '../../services/card_matcher.dart';
 import '../../state/app_shell_controller.dart';
+import '../../state/batch_session.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_typography.dart';
+import 'batch_review_screen.dart';
+import 'batch_tray.dart';
 import 'candidates_sheet.dart';
 import 'confirm_screen.dart';
+import 'inline_picker.dart';
 
 /// Tela 2 do fluxo (README §2 "Escanear") — sub-view da aba Escanear.
 ///
@@ -54,8 +58,12 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   bool _sheetOpen = false;
   int _initGeneration = 0;
   bool _torchOn = false;
-  bool _batchMode = false; // só visual por ora (decisão de produto travada)
   String? _cameraError;
+
+  // Batch mode overlay state
+  bool _showingInlinePicker = false;
+  String? _batchHint;
+  Timer? _batchHintTimer;
 
   final _setRepo = CardSetRepository();
   List<TcgCard> _candidates = const [];
@@ -74,6 +82,8 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     _initCamera();
   }
 
+  String _lastLoadedLanguage = '';
+
   @override
   void didUpdateWidget(covariant ScanView old) {
     super.didUpdateWidget(old);
@@ -82,13 +92,15 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
 
   Future<void> _loadCandidates() async {
     final set = widget.activeSet;
+    final lang = context.read<AppShellController>().scanLanguage;
+    _lastLoadedLanguage = lang;
     setState(() => _loadingCandidates = true);
 
     if (set != null) {
       // Modo com set escolhido: busca só as cartas desse set
       _globalMode = false;
       try {
-        final cards = await _cardRepo.fetchCardsForSet(set.id);
+        final cards = await _cardRepo.fetchCardsForSet(set.id, language: lang);
         if (!mounted) return;
         setState(() {
           _candidates = cards
@@ -116,7 +128,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     // Modo universo aberto: carrega todos os sets e suas cartas
     _globalMode = true;
     try {
-      final sets = await _setRepo.fetchAllSets();
+      final sets = await _setRepo.fetchAllSets(language: lang);
       if (!mounted) return;
       _allSets = sets;
       final allCards = await _cardRepo.fetchAllCardsBrief();
@@ -165,13 +177,18 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final active = context.watch<AppShellController>().tabIndex == AppShellController.scanTabIndex;
-    if (active == _tabActive) return;
-    _tabActive = active;
-    if (active) {
-      _initCamera();
-    } else {
-      _stopCamera();
+    final shell = context.watch<AppShellController>();
+    final active = shell.tabIndex == AppShellController.scanTabIndex;
+    if (active != _tabActive) {
+      _tabActive = active;
+      if (active) {
+        _initCamera();
+      } else {
+        _stopCamera();
+      }
+    }
+    if (shell.scanLanguage != _lastLoadedLanguage && _lastLoadedLanguage.isNotEmpty) {
+      _loadCandidates();
     }
   }
 
@@ -227,7 +244,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   static String _keyOf(List<TcgCard> cards) => (cards.map((c) => c.id).toList()..sort()).join('|');
 
   Future<void> _processLatestFrame() async {
-    if (_isProcessing || _sheetOpen || _candidates.isEmpty) return;
+    if (_isProcessing || _sheetOpen || _showingInlinePicker || _candidates.isEmpty) return;
     final frame = _latestFrame;
     final controller = _controller;
     if (frame == null || controller == null) return;
@@ -260,6 +277,20 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
 
   Future<void> _showCandidates(List<TcgCard> choices) async {
     if (!mounted) return;
+    final isBatch = context.read<AppShellController>().batchMode;
+
+    if (!isBatch) {
+      return _showCandidatesSheet(choices);
+    }
+
+    if (choices.length == 1) {
+      _batchAutoAdd(choices.first);
+    } else {
+      _showBatchInlinePicker(choices);
+    }
+  }
+
+  Future<void> _showCandidatesSheet(List<TcgCard> choices) async {
     setState(() => _sheetOpen = true);
     final setName = widget.activeSet?.name ?? 'todas as coleções';
     final picked = await showModalBottomSheet<TcgCard>(
@@ -270,15 +301,56 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     );
     if (!mounted) return;
     setState(() => _sheetOpen = false);
-    _resolvedKey = ''; // sheet fechou (escolheu ou dispensou): pode perguntar de novo
+    _resolvedKey = '';
     if (picked != null) {
       HapticFeedback.mediumImpact();
       _stopCamera();
+      final lang = context.read<AppShellController>().scanLanguage;
       await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(builder: (_) => ConfirmScreen(card: _toDomainCard(picked))),
+        MaterialPageRoute(builder: (_) => ConfirmScreen(card: _toDomainCard(picked), language: lang)),
       );
       if (mounted && _tabActive) _initCamera();
     }
+  }
+
+  void _batchAutoAdd(TcgCard card) {
+    HapticFeedback.lightImpact();
+    final lang = context.read<AppShellController>().scanLanguage;
+    context.read<BatchSession>().add(_toDomainCard(card), language: lang);
+    _showBatchHint(card.name);
+  }
+
+  void _showBatchInlinePicker(List<TcgCard> choices) {
+    setState(() => _showingInlinePicker = true);
+    // inline picker is shown as overlay in build()
+    _inlinePickerChoices = choices;
+  }
+
+  List<TcgCard> _inlinePickerChoices = const [];
+
+  void _onInlinePick(TcgCard card) {
+    setState(() {
+      _showingInlinePicker = false;
+      _inlinePickerChoices = const [];
+    });
+    _resolvedKey = '';
+    _batchAutoAdd(card);
+  }
+
+  void _onInlinePickDismiss() {
+    setState(() {
+      _showingInlinePicker = false;
+      _inlinePickerChoices = const [];
+    });
+    _resolvedKey = '';
+  }
+
+  void _showBatchHint(String cardName) {
+    _batchHintTimer?.cancel();
+    setState(() => _batchHint = cardName);
+    _batchHintTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _batchHint = null);
+    });
   }
 
   domain.Card _toDomainCard(TcgCard c) => domain.Card(
@@ -291,6 +363,46 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
         imageBaseUrl: c.imageBaseUrl,
         nationalDexIds: c.dexIds,
       );
+
+  void _toggleBatchMode() {
+    final shell = context.read<AppShellController>();
+    final session = context.read<BatchSession>();
+    if (shell.batchMode && session.entries.isNotEmpty) {
+      showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Desligar modo lote?'),
+          content: Text('${session.count} ${session.count == 1 ? 'carta não salva será descartada' : 'cartas não salvas serão descartadas'}.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      ).then((confirmed) {
+        if (confirmed == true) {
+          session.clear();
+          shell.toggleBatchMode();
+        }
+      });
+      return;
+    }
+    shell.toggleBatchMode();
+  }
+
+  void _navigateToReview() {
+    final session = context.read<BatchSession>();
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider.value(
+          value: session,
+          child: const BatchReviewScreen(),
+        ),
+      ),
+    );
+  }
 
   void _toggleTorch() async {
     final controller = _controller;
@@ -308,6 +420,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _processingTimer?.cancel();
+    _batchHintTimer?.cancel();
     _controller?.dispose();
     _textRecognizer.close();
     super.dispose();
@@ -323,15 +436,37 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
             _buildTopBar(),
             const SizedBox(height: 8),
             _buildActiveSetPill(),
+            const SizedBox(height: 8),
+            _buildLanguagePill(),
             const SizedBox(height: 12),
             Text(
               'Enquadre a carta inteira dentro das marcas',
               style: AppType.body.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 16),
-            Expanded(child: Center(child: _buildViewfinder())),
+            Expanded(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(child: _buildViewfinder()),
+                  if (_showingInlinePicker && _inlinePickerChoices.isNotEmpty)
+                    Positioned.fill(
+                      child: InlinePicker(
+                        choices: _inlinePickerChoices,
+                        onPick: _onInlinePick,
+                        onDismiss: _onInlinePickDismiss,
+                      ),
+                    ),
+                ],
+              ),
+            ),
             _buildHintText(),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
+            if (context.watch<AppShellController>().batchMode)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: BatchTray(onTap: _navigateToReview),
+              ),
             _buildControls(),
             const SizedBox(height: 100), // folga da tab bar flutuante
           ],
@@ -392,13 +527,51 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildLanguagePill() {
+    final lang = context.watch<AppShellController>().scanLanguage;
+    final label = lang == 'pt' ? 'Português' : 'English';
+    final flag = lang == 'pt' ? '🇧🇷' : '🇺🇸';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: GestureDetector(
+        onTap: () => context.read<AppShellController>().toggleScanLanguage(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(flag, style: const TextStyle(fontSize: 14)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppType.body.copyWith(color: Colors.white, fontSize: 12),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.swap_horiz, color: Colors.white.withValues(alpha: 0.5), size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHintText() {
+    if (_batchHint != null) {
+      return Text(
+        '$_batchHint',
+        style: AppType.body.copyWith(color: AppColors.green, fontWeight: FontWeight.w600),
+      );
+    }
     String hint;
     if (_loadingCandidates) {
       hint = 'Carregando cartas da coleção…';
     } else if (_sheetOpen) {
       hint = 'Lendo a carta…';
-    } else if (_batchMode) {
+    } else if (context.read<AppShellController>().batchMode) {
       hint = 'Modo lote ativo — escaneie várias';
     } else {
       hint = 'Toque para capturar';
@@ -426,8 +599,8 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
         _RoundButton(
           icon: Icons.layers,
           size: 52,
-          highlighted: _batchMode,
-          onTap: () => setState(() => _batchMode = !_batchMode), // toggle visual (backlog: lote de verdade)
+          highlighted: context.watch<AppShellController>().batchMode,
+          onTap: () => _toggleBatchMode(),
         ),
       ],
     );

@@ -27,7 +27,9 @@ class Card {
     this.imageBaseUrl,
     this.rarity,
     this.category,
+    this.stage,
     this.hp,
+    this.regulationMark,
     this.types = const [],
     this.attacks = const [],
     this.weaknesses = const [],
@@ -36,6 +38,7 @@ class Card {
     this.variants = const {},
     this.nationalDexIds = const [],
     this.priceBrl,
+    this.pricing,
     this.updatedAt,
   });
 
@@ -48,7 +51,9 @@ class Card {
   final String? imageBaseUrl;
   final String? rarity;
   final String? category; // "Pokémon", "Treinador", "Energia"
+  final String? stage; // "Básico", "Estágio 1", "Estágio 2", "V", "VMAX"...
   final int? hp;
+  final String? regulationMark;
   final List<String> types;
   final List<CardAttack> attacks;
   final List<CardWeakness> weaknesses;
@@ -61,6 +66,10 @@ class Card {
   /// gravado na tabela `cards` (mora em `card_prices`). `null` quando o
   /// repositório de preço ainda não foi consultado.
   final double? priceBrl;
+
+  /// Preços brutos de mercado (Cardmarket EUR + TCGplayer USD). Transiente —
+  /// vem da API via `CardDetail`, não é persistido na tabela `cards`.
+  final MarketPricing? pricing;
 
   final DateTime? updatedAt;
 
@@ -77,7 +86,9 @@ class Card {
     int? printedTotal,
     String? rarity,
     String? category,
+    String? stage,
     int? hp,
+    String? regulationMark,
     List<String>? types,
     List<CardAttack>? attacks,
     List<CardWeakness>? weaknesses,
@@ -86,6 +97,7 @@ class Card {
     Map<String, bool>? variants,
     List<int>? nationalDexIds,
     double? priceBrl,
+    MarketPricing? pricing,
     DateTime? updatedAt,
   }) {
     return Card(
@@ -98,7 +110,9 @@ class Card {
       imageBaseUrl: imageBaseUrl,
       rarity: rarity ?? this.rarity,
       category: category ?? this.category,
+      stage: stage ?? this.stage,
       hp: hp ?? this.hp,
+      regulationMark: regulationMark ?? this.regulationMark,
       types: types ?? this.types,
       attacks: attacks ?? this.attacks,
       weaknesses: weaknesses ?? this.weaknesses,
@@ -107,6 +121,7 @@ class Card {
       variants: variants ?? this.variants,
       nationalDexIds: nationalDexIds ?? this.nationalDexIds,
       priceBrl: priceBrl ?? this.priceBrl,
+      pricing: pricing ?? this.pricing,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -128,7 +143,9 @@ class Card {
       imageBaseUrl: row['image_url'] as String?,
       rarity: row['rarity'] as String?,
       category: row['category'] as String?,
+      stage: row['stage'] as String?,
       hp: row['hp'] as int?,
+      regulationMark: row['regulation_mark'] as String?,
       types: (row['types'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       attacks: attacksJson
           .map((e) => CardAttack.fromJson(e as Map<String, dynamic>))
@@ -157,7 +174,12 @@ class Card {
       if (imageBaseUrl != null) 'image_url': imageBaseUrl,
       if (rarity != null) 'rarity': rarity,
       if (category != null) 'category': category,
+      // stage e regulation_mark: colunas ainda não existem na tabela cards
+      // do Supabase — incluir aqui causa erro no upsert. Adicionar as
+      // colunas no dashboard e descomentar quando prontas.
+      // if (stage != null) 'stage': stage,
       if (hp != null) 'hp': hp,
+      // if (regulationMark != null) 'regulation_mark': regulationMark,
       if (types.isNotEmpty) 'types': types,
       if (attacks.isNotEmpty)
         'attacks': attacks
@@ -205,7 +227,9 @@ class Card {
         imageBaseUrl: d.imageBaseUrl,
         rarity: d.rarity,
         category: d.category,
+        stage: d.stage,
         hp: d.hp,
+        regulationMark: d.regulationMark,
         types: d.types,
         attacks: d.attacks,
         weaknesses: d.weaknesses,
@@ -213,6 +237,7 @@ class Card {
         illustrator: d.illustrator,
         variants: d.variants,
         nationalDexIds: d.dexIds,
+        pricing: d.pricing,
         updatedAt: d.updated,
       );
 }

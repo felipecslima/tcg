@@ -39,10 +39,29 @@ class _CollectionScreenState extends State<CollectionScreen> {
   String? _error;
   _Filter _filter = _Filter.all;
 
+  late final AppShellController _shell;
+  int _lastGeneration = 0;
+
   @override
   void initState() {
     super.initState();
+    _shell = context.read<AppShellController>();
+    _lastGeneration = _shell.collectionGeneration;
+    _shell.addListener(_onShellChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _shell.removeListener(_onShellChanged);
+    super.dispose();
+  }
+
+  void _onShellChanged() {
+    if (_shell.collectionGeneration != _lastGeneration) {
+      _lastGeneration = _shell.collectionGeneration;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -312,7 +331,12 @@ class _CollectionRow extends StatelessWidget {
                     children: [
                       Text(card.name, style: AppType.listTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text('${card.setName} · ${entry.condition}', style: AppType.caption),
+                      Text(
+                        entry.language != 'pt'
+                            ? '${card.setName} · ${entry.condition} · ${entry.language.toUpperCase()}'
+                            : '${card.setName} · ${entry.condition}',
+                        style: AppType.caption,
+                      ),
                     ],
                   ),
                 ),
