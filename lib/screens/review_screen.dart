@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/scan_session_models.dart';
+import 'card_detail_screen.dart';
 
 /// Tela de revisão no fim da sessão de scan: mostra o que foi reconhecido
 /// e o que ficou pendente. Nesse MVP, "confirmar" só salva um JSON local
@@ -41,12 +42,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 'count': e.count,
               })
           .toList(),
-      'pending': widget.session.pending
-          .map((p) => {
-                'rawText': p.rawRecognizedText,
-                'scannedAt': p.scannedAt.toIso8601String(),
-              })
-          .toList(),
     };
 
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
@@ -63,8 +58,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '${session.scannedEntries.length} cartas reconhecidas '
-              '(${session.totalScannedCount} no total) · ${session.pending.length} pendentes',
+              '${session.scannedEntries.length} cartas confirmadas '
+              '(${session.totalScannedCount} no total)',
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
@@ -81,20 +76,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   title: Text(entry.card.name),
                   subtitle: Text('#${entry.card.localId}'),
                   trailing: Text('x${entry.count}'),
-                )),
-          ],
-          if (session.pending.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('Pendentes (resolver manualmente depois)',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
-            ),
-            ...session.pending.map((p) => ListTile(
-                  leading: const Icon(Icons.help_outline, color: Colors.amber),
-                  title: Text(
-                    p.rawRecognizedText.split('\n').take(2).join(' · '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CardDetailScreen(
+                        card: entry.card,
+                        language: session.language,
+                      ),
+                    ),
                   ),
                 )),
           ],

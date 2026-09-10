@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/tcg_card.dart';
 import '../services/tcgdex_api_service.dart';
 import 'scanner_screen.dart';
 

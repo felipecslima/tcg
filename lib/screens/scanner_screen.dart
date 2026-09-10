@@ -11,6 +11,7 @@ import '../models/scan_session_models.dart';
 import '../models/tcg_card.dart';
 import '../services/camera_image_converter.dart';
 import '../services/card_matcher.dart';
+import 'card_detail_screen.dart';
 import 'review_screen.dart';
 
 /// Tela de scan em "modo rajada": câmera fica ligada o tempo todo, sem
@@ -52,10 +53,17 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
   Timer? _processingTimer;
   bool _isProcessing = false;
   bool _isPaused = false;
-  String? _lastMatchedCardId;
-  String? _lastPendingText;
+  bool _navigating = false; // na tela de detalhe da carta — não processa frames
   String? _lastRecognizedPreview;
   String? _cameraError;
+
+  /// Nada entra sem toque. Enquanto tem carta(s) aqui, o scan PARA e espera
+  /// o usuário confirmar (1) ou escolher (2–3).
+  List<TcgCard> _choices = const [];
+
+  /// Conjunto de cartas que o usuário já resolveu (confirmou uma ou dispensou)
+  /// — não pergunta de novo enquanto a mesma carta continua na frente.
+  String _resolvedKey = '';
 
   static const _tickInterval = Duration(milliseconds: 600);
 
@@ -119,8 +127,13 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     }
   }
 
+  static String _keyOf(List<TcgCard> cards) =>
+      (cards.map((c) => c.id).toList()..sort()).join('|');
+
   Future<void> _processLatestFrame() async {
-    if (_isPaused || _isProcessing) return;
+    // Enquanto tem carta pra confirmar/escolher ou a tela de detalhe está
+    // aberta, o scan fica PARADO.
+    if (_isPaused || _isProcessing || _navigating || _choices.isNotEmpty) return;
     final frame = _latestFrame;
     final controller = _controller;
     if (frame == null || controller == null) return;
@@ -129,7 +142,7 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     try {
       final inputImage = CameraImageConverter.toInputImage(frame, controller.description);
       if (inputImage == null) {
-        developer.log('Failed to convert camera image to InputImage', name: 'pokecardex.scanner');
+        developer.log('Falha ao converter frame', name: 'pokecardex.scanner');
         return;
       }
 
@@ -137,38 +150,52 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
       final text = recognized.text.trim();
       if (text.isEmpty) return;
 
-      setState(() => _lastRecognizedPreview = text.split('\n').take(2).join(' · '));
+      if (mounted) {
+        setState(() => _lastRecognizedPreview = text.split('\n').take(2).join(' · '));
+      }
 
       final result = _matcher.match(text, widget.candidates);
-      if (result.isConfident && result.card != null) {
-        developer.log('Match found: ${result.card!.name} (score: ${result.score})', name: 'pokecardex.scanner');
-        _handleMatch(result.card!);
-      } else {
-        developer.log('No confident match for text: $text (best score: ${result.score})', name: 'pokecardex.scanner');
-        _handlePending(text);
+      if (result.choices.isEmpty) {
+        _resolvedKey = ''; // não tem carta na frente → esquece o que foi resolvido
+        return;
       }
+      final key = _keyOf(result.choices);
+      if (key == _resolvedKey) return; // mesma carta ainda na frente, já resolvida
+
+      developer.log('Pergunta: ${result.choices.map((c) => c.localId).join("/")} '
+          '(score ${result.score.toStringAsFixed(2)})', name: 'pokecardex.scanner');
+      _resolvedKey = '';
+      if (mounted) setState(() => _choices = result.choices);
     } catch (e) {
-      developer.log('Error processing frame: $e', name: 'pokecardex.scanner', error: e);
+      developer.log('Erro processando frame: $e', name: 'pokecardex.scanner', error: e);
     } finally {
       _isProcessing = false;
     }
   }
 
-  void _handleMatch(TcgCard card) {
-    if (card.id == _lastMatchedCardId) return; // mesma carta ainda em frame
-    _lastMatchedCardId = card.id;
-    _lastPendingText = null;
+  void _confirm(TcgCard card) {
+    _resolvedKey = _keyOf(_choices);
     HapticFeedback.mediumImpact();
-    setState(() => _session.addMatch(card));
+    setState(() {
+      _session.addMatch(card);
+      _choices = const [];
+    });
+    _openDetail(card);
   }
 
-  void _handlePending(String text) {
-    // Normaliza grosseiramente pra não duplicar pendência do mesmo ruído.
-    final key = text.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (key == _lastPendingText) return;
-    _lastPendingText = key;
-    _lastMatchedCardId = null;
-    setState(() => _session.addPending(text));
+  Future<void> _openDetail(TcgCard card) async {
+    _navigating = true;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CardDetailScreen(card: card, language: widget.language),
+      ),
+    );
+    if (mounted) _navigating = false;
+  }
+
+  void _dismissChoices() {
+    _resolvedKey = _keyOf(_choices); // não conta nada, não repergunta o mesmo
+    setState(() => _choices = const []);
   }
 
   void _togglePause() => setState(() => _isPaused = !_isPaused);
@@ -296,6 +323,34 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
               ),
             ),
           ),
+        if (_choices.isNotEmpty) ...[
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _dismissChoices,
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                alignment: Alignment.topCenter,
+                padding: const EdgeInsets.only(top: 56),
+                child: Text(
+                  _choices.length == 1
+                      ? '⏸  Parado — confirme a carta'
+                      : '⏸  Parado — escolha a carta',
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: _CardPrompt(
+              choices: _choices,
+              onPick: _confirm,
+              onDismiss: _dismissChoices,
+            ),
+          ),
+        ],
         if (_isPaused)
           Positioned.fill(
             child: Container(
@@ -312,16 +367,134 @@ class _ScannerScreenState extends State<ScannerScreen> with WidgetsBindingObserv
     return Container(
       color: const Color(0xFF111111),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Text(
+        '${_session.scannedEntries.length} cartas únicas · ${_session.totalScannedCount} no total',
+        style: const TextStyle(color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// Card de confirmação / escolha. Nada entra na sessão sem passar por aqui.
+///   1 carta  → miniatura + nome/número + [Confirmar] / [Não é]
+///   2–3      → grade de miniaturas pra escolher
+class _CardPrompt extends StatelessWidget {
+  const _CardPrompt({
+    required this.choices,
+    required this.onPick,
+    required this.onDismiss,
+  });
+
+  final List<TcgCard> choices;
+  final void Function(TcgCard) onPick;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final box = BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.88),
+      borderRadius: BorderRadius.circular(12),
+    );
+    if (choices.length == 1) {
+      final c = choices.first;
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: box,
+        child: Row(
+          children: [
+            if (c.thumbnailUrl != null)
+              Image.network(c.thumbnailUrl!, height: 72,
+                  errorBuilder: (_, __, ___) => const SizedBox(height: 72, width: 52)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(c.name,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text('#${c.localId}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      FilledButton(
+                        onPressed: () => onPick(c),
+                        child: const Text('Confirmar'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: onDismiss,
+                        style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                        child: const Text('Não é'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final allSameName = choices.every((c) => c.name == choices.first.name);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: box,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${_session.scannedEntries.length} cartas únicas · ${_session.totalScannedCount} no total',
-            style: const TextStyle(color: Colors.white),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  allSameName ? '${choices.first.name} — qual versão?' : 'Qual carta?',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+              GestureDetector(
+                onTap: onDismiss,
+                child: const Icon(Icons.close, color: Colors.white54, size: 20),
+              ),
+            ],
           ),
-          Text(
-            '${_session.pending.length} pendentes',
-            style: TextStyle(color: _session.pending.isEmpty ? Colors.white54 : Colors.amber),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final c in choices)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white38),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      onPressed: () => onPick(c),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (c.thumbnailUrl != null)
+                            Image.network(c.thumbnailUrl!, height: 68,
+                                errorBuilder: (_, __, ___) => const SizedBox(height: 68, width: 49)),
+                          const SizedBox(height: 2),
+                          if (!allSameName)
+                            Text(c.name,
+                                style: const TextStyle(fontSize: 11),
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text('#${c.localId}', style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),

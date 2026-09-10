@@ -13,6 +13,7 @@ class TcgCard {
   final String setName;
   final String name;
   final String localId; // número da carta dentro do set (ex: "025", "199")
+  final int printedTotal; // total impresso do set (o "132" de "091/132"); 0 se desconhecido
   final String? imageBaseUrl;
   final List<int> dexIds;
 
@@ -23,6 +24,7 @@ class TcgCard {
     required this.name,
     required this.localId,
     required this.dexIds,
+    this.printedTotal = 0,
     this.imageBaseUrl,
   });
 
@@ -36,6 +38,7 @@ class TcgCard {
     Map<String, dynamic> json, {
     required String setId,
     required String setName,
+    int printedTotal = 0,
   }) {
     return TcgCard(
       id: json['id'] as String,
@@ -43,6 +46,7 @@ class TcgCard {
       setName: setName,
       name: json['name'] as String? ?? '',
       localId: json['localId']?.toString() ?? '',
+      printedTotal: printedTotal,
       imageBaseUrl: json['image'] as String?,
       dexIds: (json['dexId'] as List?)?.map((e) => (e as num).toInt()).toList() ?? const [],
     );
