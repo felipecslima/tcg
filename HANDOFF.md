@@ -91,8 +91,19 @@ Sem o `--dart-define-from-file`, o app abre em `_MissingConfig`.
    contagem por região confere com os totais canônicos (Kanto 151 … Paldea 120).
    `sync_runs` tem a linha do job. Nomes vêm da PokéAPI em minúsculo com hífen
    (`mr-mime`, `deoxys-normal`) — normalizar pra display fica pendente.
-3. **Edge Functions de sync** (`sync-sets`, `sync-set-cards`, `refresh-prices`)
-   + schedules `pg_cron`. Cada uma grava em `sync_runs`.
+3. ~~**Edge Functions de sync**~~ ✅ **FEITO (2026-09-10).** `sync-sets`,
+   `sync-set-cards`, `refresh-prices` deployadas (`verify_jwt=false` + header
+   `x-sync-key` em `public.sync_config`), schedules `pg_cron` ativos (03:00/03:15/
+   03:30 BRT via `private_sync_invoke`). Código em `supabase/functions/`,
+   migrations 07–10 em `supabase/migrations/`, doc em
+   `supabase/functions/README.md`. Testadas de ponta a ponta: `sets` tem os
+   218 sets + fila; `sync-set-cards` baixou 3 sets de teste (167 cartas brief);
+   `refresh-prices` puxou preço da Charizard base1-4 (3 linhas em `card_prices`,
+   carta enriquecida com hp/ataques/raridade).
+   **Falta:** rodar a carga inicial das cartas —
+   `select private_sync_invoke('sync-set-cards','limit=50')` ~5× no SQL editor
+   (só 3 dos 218 sets têm cartas). `refresh-prices` no cron só age em cartas de
+   coleção/wishlist; catálogo completo de preço vem sob demanda / lote manual.
 4. **Camada de repositório "DB-first"** no Flutter: `CardRepository`,
    `SetRepository`, `PriceRepository`, `PokedexRepository` — leem da base,
    só chamam API no miss/stale, fazem upsert + gravam `api_cache_raw`.
