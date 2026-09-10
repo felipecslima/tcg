@@ -83,9 +83,14 @@ Sem o `--dart-define-from-file`, o app abre em `_MissingConfig`.
 1. **Passo manual no painel Supabase:** Authentication → Providers → Email →
    **desligar "Confirm email"**. Sem isso o signup não gera sessão (espera
    confirmação por email) e o AuthGate não avança. MCP não expõe esse toggle.
-2. **`seed-pokedex`** — Edge Function que varre a PokéAPI (`/pokemon-species`
-   ou o dump de `veekun/pokedex`) e popula `pokedex` (1025 linhas: nome,
-   tipos, `region_id` via faixa de dex já em `regions`, sprite). Roda 1×.
+2. ~~**`seed-pokedex`**~~ ✅ **FEITO (2026-09-10).** Edge Function em
+   `supabase/functions/seed-pokedex/` (deployada, `verify_jwt=true`, aceita
+   `?start=&end=` pra rodar por faixa). A tabela `pokedex` **já está populada**
+   com as 1025 linhas (nome, tipos, sprite official-artwork, `region_id` +
+   `generation` via faixa de dex) — feito via MCP batch, não pela função;
+   contagem por região confere com os totais canônicos (Kanto 151 … Paldea 120).
+   `sync_runs` tem a linha do job. Nomes vêm da PokéAPI em minúsculo com hífen
+   (`mr-mime`, `deoxys-normal`) — normalizar pra display fica pendente.
 3. **Edge Functions de sync** (`sync-sets`, `sync-set-cards`, `refresh-prices`)
    + schedules `pg_cron`. Cada uma grava em `sync_runs`.
 4. **Camada de repositório "DB-first"** no Flutter: `CardRepository`,
