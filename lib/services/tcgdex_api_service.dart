@@ -107,7 +107,11 @@ class TcgdexApiService {
     if (inflight != null) return inflight; // dedup de requisições simultâneas
     final f = _loadCard(key, cardId, language);
     _cardInflight[key] = f;
-    f.whenComplete(() => _cardInflight.remove(key));
+    // `.ignore()`: o erro de `f` já é tratado por quem chama `fetchCard`
+    // (que recebe o mesmo `f`) — sem isso, essa segunda "cauda" do future
+    // fica sem listener de erro e a zone do `flutter test` acusa exceção
+    // não tratada mesmo com o try/catch do chamador funcionando normalmente.
+    f.whenComplete(() => _cardInflight.remove(key)).ignore();
     return f;
   }
 
