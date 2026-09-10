@@ -1,10 +1,121 @@
-# Handoff — PokeCardex Scanner (Flutter MVP)
+# Handoff — PokeCardex
 
-> Escrito em 2026-09-09 pra outra sessão/IA continuar. O app está **rodando
-> de ponta a ponta num iPhone físico** (câmera → OCR → match → salvar JSON).
-> Leia isto antes de mexer — a maior parte do tempo dessa sessão foi gasta
-> destravando o pipeline iOS (Xcode/CocoaPods/assinatura/câmera), não no
-> produto em si. Não repita esse trabalho.
+> ⬇️ **Fase atual (2026-09-10): Backend Supabase + design foundation + auth.**
+> A seção logo abaixo é o estado mais recente. O handoff do scanner MVP
+> (2026-09-09) continua válido e vem depois — o pipeline câmera→OCR→match
+> não foi tocado nesta fase.
+
+---
+
+# Fase 2 — Backend + Design (2026-09-10)
+
+## Contexto da virada
+O app deixou de ser "só o scanner MVP". Chegou um **design hi-fi completo**
+(`design_handoff_pokedex_tcg/` — 9 telas, tema dark lilás, tab bar
+flutuante, README com todos os tokens) e a decisão de montar um **backend
+Supabase** com auth, catálogo persistido e a coleção do usuário.
+
+Escopo desta rodada (feito): **design foundation + Supabase + auth**.
+Telas reais do design ficam pra próxima.
+
+## Supabase — projeto `pokecardex`
+- ref `muprvxukzvgyywftjbwu` · região `sa-east-1` · org `osupjgakavjsnrotpxne`
+- URL `https://muprvxukzvgyywftjbwu.supabase.co`
+- publishable key `sb_publishable_0hBB8glL5IhQ9MBT9s3P1w_Kj0NkGp7` (em `env.json`, gitignored)
+- free tier ($0/mês)
+- Painel: https://supabase.com/dashboard/project/muprvxukzvgyywftjbwu
+
+### Schema aplicado (migrations 00–06, via MCP `apply_migration`)
+| Grupo | Tabelas |
+|---|---|
+| Catálogo (RLS: leitura pública, escrita só service role) | `regions` (**já populada** Kanto→Paldea por faixa de national dex), `pokedex` (1..1025, FK `region_id`), `sets`, `cards` (com `hp`, `attacks` jsonb, `types`, `national_dex_id`, `variants`), `card_prices` (**append-only** — cada fetch é uma linha, alimenta variação %) |
+| Infra de cache / fallback (RLS on, sem policy = service role) | `api_cache_raw` (payload cru append-only, nunca perde original), `fetch_log` (`next_refresh_at` por entidade → dirige sync incremental), `sync_runs` (observabilidade dos jobs) |
+| Por usuário (RLS `auth.uid()`) | `profiles` (1:1 auth.users — nome, avatar, level, xp, streak), `collections`, `collection_cards` (finish/condition/quantity 1–99), `wishlist` |
+
+Trigger `handle_new_user` (SECURITY DEFINER, não exposto como RPC): no
+signup cria `profiles` + 3 `collections` default (Minhas cartas / Deck /
+Para trocar).
+
+### Requisito de dados FORTE do usuário (não esquecer ao construir repositórios)
+> Toda resposta de API externa (TCGdex cartas/preço, PokéAPI pokédex/região)
+> DEVE ser gravada na nossa base ANTES de ir pra UI. A base é fonte primária
+> e fallback offline. Nenhuma tela chama API direto — sempre via repositório
+> com TTL (catálogo 30d, preço 24h, pokédex ~infinito). Se a API cair, serve
+> o dado da base mesmo vencido.
+
+### Estratégia de atualização (planejada, não implementada)
+- `pg_cron` + `pg_net` já habilitados.
+- Jobs: `sync-sets` (diário, detecta set novo — 1 request barato), `sync-set-cards` (fila, baixa cartas do set novo), `refresh-prices` (diário, madrugada, só cartas "quentes": em `collection_cards` ou vistas recentemente), `revalidate-stale-cards` (semanal, `updated_at` > 30d, lotes pequenos).
+- Incremental sempre: `fetch_log` + `If-None-Match`/`If-Modified-Since`, backoff em 429.
+- Sob demanda: abrir carta com preço > 24h dispara refresh em background, mostra valor antigo enquanto isso.
+
+## Flutter — o que foi criado nesta rodada
+`flutter analyze` limpo, `flutter test` 19/19 passando.
+
+| Arquivo | Papel |
+|---|---|
+| `pubspec.yaml` | + `supabase_flutter: ^2.8.0`, `google_fonts: ^6.2.1` |
+| `env.json` (gitignored) / `env.example.json` | chaves Supabase via `--dart-define-from-file` |
+| `.gitignore` | + `/env.json` |
+| `lib/config.dart` | `Config.supabaseUrl` / `.supabaseAnonKey` de `String.fromEnvironment`; `isConfigured` |
+| `lib/theme/app_colors.dart` | todos os tokens de cor do README + `artGradient` |
+| `lib/theme/app_typography.dart` | escala Sora / DM Sans / DM Mono (via google_fonts) |
+| `lib/theme/app_theme.dart` | `AppTheme.dark` (ThemeData), `AppRadii`, `AppShadows`, `AppTheme.screenPadding` |
+| `lib/widgets/primary_button.dart` | `PrimaryButton` (sombra, loading), `SecondaryButton` |
+| `lib/widgets/app_widgets.dart` | `AppChip`, `ProgressBar`, `ArtPlaceholder`, `RarityPill`, `QtyStepper` |
+| `lib/widgets/floating_tab_bar.dart` | `FloatingTabBar` + `TabItem` (blur 22, raio 26, translúcido) |
+| `lib/services/auth_service.dart` | wrapper email/senha sobre `Supabase.instance.client.auth` |
+| `lib/screens/auth/auth_gate.dart` | `StreamBuilder<AuthState>` → `AppShell` ou `LoginScreen` |
+| `lib/screens/auth/auth_scaffold.dart` | moldura comum + `showAuthError` (mensagens PT) |
+| `lib/screens/auth/login_screen.dart` | login + links p/ signup e reset |
+| `lib/screens/auth/sign_up_screen.dart` | nome + email + senha (`display_name` vai no metadata → trigger) |
+| `lib/screens/auth/forgot_password_screen.dart` | `resetPasswordForEmail` |
+| `lib/screens/app_shell.dart` | 5 abas (`IndexedStack` + `FloatingTabBar`). **Placeholders** exceto: Escanear → push `SetSelectionScreen` (scanner atual), Perfil → mostra email + logout |
+| `lib/main.dart` | `Supabase.initialize` (se `isConfigured`) + `AuthGate`; tela `_MissingConfig` se faltar env |
+
+### Rodar
+```bash
+flutter run --dart-define-from-file=env.json
+```
+Sem o `--dart-define-from-file`, o app abre em `_MissingConfig`.
+
+## Pendências desta fase (ordem sugerida p/ a próxima aba)
+1. **Passo manual no painel Supabase:** Authentication → Providers → Email →
+   **desligar "Confirm email"**. Sem isso o signup não gera sessão (espera
+   confirmação por email) e o AuthGate não avança. MCP não expõe esse toggle.
+2. **`seed-pokedex`** — Edge Function que varre a PokéAPI (`/pokemon-species`
+   ou o dump de `veekun/pokedex`) e popula `pokedex` (1025 linhas: nome,
+   tipos, `region_id` via faixa de dex já em `regions`, sprite). Roda 1×.
+3. **Edge Functions de sync** (`sync-sets`, `sync-set-cards`, `refresh-prices`)
+   + schedules `pg_cron`. Cada uma grava em `sync_runs`.
+4. **Camada de repositório "DB-first"** no Flutter: `CardRepository`,
+   `SetRepository`, `PriceRepository`, `PokedexRepository` — leem da base,
+   só chamam API no miss/stale, fazem upsert + gravam `api_cache_raw`.
+   Adaptar `TcgdexApiService` (hoje bate direto na TCGdex) pra passar por aí.
+5. **Telas reais do design** (README §Screens), sugestão: Coleção → Detalhe
+   novo → Jornadas → Região → Busca → Perfil → Candidatos (sheet) → Confirmar.
+   Reaproveitar `CardDetailScreen`/`ScannerScreen` adaptando ao tema novo.
+6. **Fontes:** hoje via `google_fonts` (download runtime). README pede
+   empacotar `.ttf` em `assets/fonts/` antes do release (uso offline).
+7. Ataques/HP: vêm do TCGdex no endpoint de carta individual (`card.attacks`,
+   `card.hp`) — o modelo `cards.attacks` (jsonb) já está pronto pra receber.
+
+## Decisões já tomadas nesta fase (não reabrir)
+- Auth: email/senha comum (sem social, sem anônimo).
+- Região E Set coexistem (Jornadas por região, catálogo por set). Mapa
+  Pokémon→região é por geração/faixa de national dex (fixo, já em `regions`).
+- Pokédex/região: fonte é PokéAPI.
+- Supabase do zero, `sa-east-1`.
+- Chaves via `--dart-define-from-file`, não `lib/config.dart` versionado.
+
+---
+
+# Fase 1 — Handoff do Scanner MVP (2026-09-09)
+
+> O app está **rodando de ponta a ponta num iPhone físico** (câmera → OCR →
+> match → salvar JSON). Leia isto antes de mexer no scanner — a maior parte
+> do tempo daquela sessão foi gasta destravando o pipeline iOS
+> (Xcode/CocoaPods/assinatura/câmera), não no produto. Não repita esse trabalho.
 
 ## Estado agora
 
