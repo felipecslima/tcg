@@ -7,14 +7,33 @@ import 'staleness.dart';
 
 /// Abstração fina sobre a tabela `cards` — permite fake em teste.
 abstract class CardStore {
+  Future<List<Map<String, dynamic>>> fetchAll();
   Future<List<Map<String, dynamic>>> fetchBySet(String setId);
   Future<Map<String, dynamic>?> fetchById(String id);
   Future<void> upsertAll(List<Map<String, dynamic>> rows);
+  Future<List<Map<String, dynamic>>> searchByName(String query, {int limit = 20});
+  Future<List<Map<String, dynamic>>> fetchByDexRange(int start, int end);
 }
 
 class SupabaseCardStore implements CardStore {
   SupabaseCardStore(this._client);
   final SupabaseClient _client;
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchAll() async {
+    const pageSize = 1000;
+    final all = <Map<String, dynamic>>[];
+    while (true) {
+      final rows = await _client
+          .from('cards')
+          .select('id,set_id,local_id,name,image_url,national_dex_id,updated_at')
+          .range(all.length, all.length + pageSize - 1);
+      final list = (rows as List).cast<Map<String, dynamic>>();
+      all.addAll(list);
+      if (list.length < pageSize) break;
+    }
+    return all;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> fetchBySet(String setId) async {
@@ -32,6 +51,27 @@ class SupabaseCardStore implements CardStore {
     if (rows.isEmpty) return;
     await _client.from('cards').upsert(rows);
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> searchByName(String query, {int limit = 20}) async {
+    final rows = await _client
+        .from('cards')
+        .select('*, sets(name)')
+        .ilike('name', '%$query%')
+        .limit(limit);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchByDexRange(int start, int end) async {
+    final rows = await _client
+        .from('cards')
+        .select('*, sets(name)')
+        .gte('national_dex_id', start)
+        .lte('national_dex_id', end)
+        .order('national_dex_id');
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
 }
 
 /// Cartas de um set / carta individual — DB-first, TTL 30 dias (catálogo).
@@ -48,6 +88,13 @@ class CardRepository {
   final CardStore _store;
   final TcgdexApiService _api;
   final ApiCacheLogger _cacheLogger;
+
+  /// Todas as cartas brief do banco (sem refresh de API).
+  /// Usado pelo modo universo aberto do scanner (~23k linhas, só campos leves).
+  Future<List<Card>> fetchAllCardsBrief() async {
+    final rows = await _store.fetchAll();
+    return rows.map(Card.fromSupabaseRow).toList();
+  }
 
   /// Cartas "brief" do set (nome, número, imagem) — base do matching do
   /// scanner e da tela de Candidatos.
@@ -92,5 +139,17 @@ class CardRepository {
       }
     }
     return Card.fromSupabaseRow(row!);
+  }
+
+  /// Busca textual por nome (ilike) — usada pela tela de Busca.
+  Future<List<Card>> searchCards(String query, {int limit = 20}) async {
+    final rows = await _store.searchByName(query, limit: limit);
+    return rows.map(Card.fromSupabaseRow).toList();
+  }
+
+  /// Cartas cujo national_dex_id está no range da região — usada por Jornadas.
+  Future<List<Card>> fetchCardsByDexRange(int start, int end) async {
+    final rows = await _store.fetchByDexRange(start, end);
+    return rows.map(Card.fromSupabaseRow).toList();
   }
 }

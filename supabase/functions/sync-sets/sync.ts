@@ -148,6 +148,7 @@ export function setRow(b: any) {
   };
   if (b.serie?.name) row.series = b.serie.name;
   if (b.releaseDate) row.release_date = b.releaseDate;
+  if (b.abbreviation?.official) row.abbreviation = b.abbreviation.official;
   return row;
 }
 

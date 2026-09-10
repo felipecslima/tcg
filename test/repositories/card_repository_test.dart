@@ -11,6 +11,9 @@ class _FakeCardStore implements CardStore {
   int upsertCalls = 0;
 
   @override
+  Future<List<Map<String, dynamic>>> fetchAll() async => rows;
+
+  @override
   Future<List<Map<String, dynamic>>> fetchBySet(String setId) async =>
       rows.where((r) => (r['set_id'] as String?) == setId).toList();
 
@@ -26,6 +29,17 @@ class _FakeCardStore implements CardStore {
       rows.add(r);
     }
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> searchByName(String query, {int limit = 20}) async =>
+      rows.where((r) => (r['name'] as String? ?? '').toLowerCase().contains(query.toLowerCase())).take(limit).toList();
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchByDexRange(int start, int end) async =>
+      rows.where((r) {
+        final dex = r['national_dex_id'] as int?;
+        return dex != null && dex >= start && dex <= end;
+      }).toList();
 }
 
 T? _firstOrNull<T>(Iterable<T> it) => it.isEmpty ? null : it.first;

@@ -1,4 +1,5 @@
 import '../models/tcg_card.dart';
+import '../repositories/set_repository.dart';
 
 /// O que o scanner deve mostrar pra este frame:
 ///   - `choices` vazio  → nada plausível, segue escaneando sem perguntar
@@ -38,7 +39,144 @@ class CardMatcher {
   /// 2º lugar precisa estar tão atrás pra colapsar num "É esta?" só.
   static const double _clearMargin = 0.18;
 
-  MatchResult match(String recognizedText, List<TcgCard> candidates) {
+  // Sufixos de idioma impressos nas cartas (ex: "MEG PT", "SSP EN").
+  static final _langSuffixes = RegExp(r'\b(PT|EN|FR|DE|IT|ES|KO|JA|ZH)\b');
+
+  /// Extrai o código do set do texto OCR (ex: "MEG PT 034/132" → "MEG").
+  /// Procura 2-4 letras maiúsculas que aparecem perto do número do coletor,
+  /// ignorando sufixos de idioma.
+  String? parseSetCode(String ocrText) {
+    // Normaliza OCR: remove acentos comuns e padroniza espaços
+    final clean = ocrText.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    // Procura padrões como "MEG PT 034/132" ou "SSP 145/132"
+    // O código do set fica antes do número do coletor, opcionalmente
+    // seguido de um sufixo de idioma de 2 letras.
+    final m = RegExp(
+      r'\b([A-Z]{2,4})\s*(?:(?:PT|EN|FR|DE|IT|ES|KO|JA|ZH)\s*)?(\d{1,3}\s*/\s*\d{1,3})',
+    ).firstMatch(clean);
+    if (m != null) {
+      final code = m.group(1)!;
+      // Não retornar se o "código" é na verdade um sufixo de idioma isolado
+      if (!_langSuffixes.hasMatch(code)) return code;
+    }
+
+    // Fallback: qualquer bloco de 2-4 maiúsculas que NÃO seja sufixo de idioma,
+    // encontrado na mesma região do texto que contém dígitos
+    final blocks = RegExp(r'\b([A-Z]{2,4})\b').allMatches(clean);
+    for (final b in blocks) {
+      final code = b.group(1)!;
+      if (_langSuffixes.hasMatch(code)) continue;
+      // Verifica se há dígitos por perto (±30 chars)
+      final start = (b.start - 30).clamp(0, clean.length);
+      final end = (b.end + 30).clamp(0, clean.length);
+      final vicinity = clean.substring(start, end);
+      if (RegExp(r'\d{2,3}\s*/\s*\d{2,3}').hasMatch(vicinity)) return code;
+    }
+    return null;
+  }
+
+  /// Match global: filtra candidatos pelo código do set (via abbreviation) ou
+  /// pelo denominador (printedTotal), depois aplica o scoring normal.
+  MatchResult matchGlobal(
+    String recognizedText,
+    List<TcgCard> allCandidates,
+    List<CardSetBrief> sets, {
+    bool debug = false,
+  }) {
+    if (allCandidates.isEmpty) return const MatchResult(score: 0);
+
+    final setCode = parseSetCode(recognizedText);
+    final parsed = _parseCollectorNumber(recognizedText);
+
+    if (debug) {
+      print('[matchGlobal] OCR: "${recognizedText.replaceAll('\n', ' | ')}"'); // ignore: avoid_print
+      print('[matchGlobal] setCode=$setCode num=${parsed?.number} denom=${parsed?.denominator}'); // ignore: avoid_print
+    }
+
+    // 1) Filtrar por abreviação do set
+    List<TcgCard> filtered = allCandidates;
+    bool abbreviationMatched = false;
+    if (setCode != null) {
+      final matchingSets = sets
+          .where((s) => s.abbreviation?.toUpperCase() == setCode.toUpperCase())
+          .map((s) => s.id)
+          .toSet();
+      if (matchingSets.isNotEmpty) {
+        final byAbbr = allCandidates.where((c) => matchingSets.contains(c.setId)).toList();
+        if (byAbbr.isNotEmpty) {
+          filtered = byAbbr;
+          abbreviationMatched = true;
+        }
+        if (debug) print('[matchGlobal] set filter: ${matchingSets.join(",")} → ${byAbbr.length} cartas'); // ignore: avoid_print
+      } else if (debug) {
+        print('[matchGlobal] set code "$setCode" sem match em nenhum set'); // ignore: avoid_print
+      }
+    }
+
+    // 2) Fallback: filtrar por printedTotal (denominador)
+    if (!abbreviationMatched && parsed?.denominator != null) {
+      final denom = int.tryParse(parsed!.denominator!.replaceAll(RegExp(r'\D'), ''));
+      if (denom != null && denom > 0) {
+        final matchingSets = sets
+            .where((s) => s.printedTotal == denom)
+            .map((s) => s.id)
+            .toSet();
+        if (matchingSets.isNotEmpty) {
+          filtered = allCandidates.where((c) => matchingSets.contains(c.setId)).toList();
+          if (debug) print('[matchGlobal] denom filter ($denom): ${matchingSets.length} sets → ${filtered.length} cartas'); // ignore: avoid_print
+        }
+      }
+    }
+
+    // 3) Sem filtro nenhum (nem set, nem denominador): exige fração N/M.
+    if (filtered.length == allCandidates.length && parsed == null) {
+      if (debug) print('[matchGlobal] sem filtro e sem fração → score 0'); // ignore: avoid_print
+      return const MatchResult(score: 0);
+    }
+
+    // 4) Scoring normal nos candidatos filtrados
+    final result = match(recognizedText, filtered, debug: debug);
+    if (result.choices.isEmpty) {
+      if (debug) print('[matchGlobal] match() retornou vazio (score=${result.score.toStringAsFixed(2)})'); // ignore: avoid_print
+      return result;
+    }
+
+    // 5) Se a ABREVIAÇÃO do set bateu (MEG, SSP), confia: set+número é suficiente.
+    // O OCR nem sempre pega o nome limpo (ângulo, brilho, holo).
+    if (abbreviationMatched) {
+      if (debug) print('[matchGlobal] ✓ abbreviation matched, confia: ${result.choices.map((c) => "${c.id}(${c.name})").join(", ")}'); // ignore: avoid_print
+      return result;
+    }
+
+    // 6) Sem set code válido: exige que o nome do candidato apareça no OCR.
+    // Sem isso, número+denominador sozinhos geram falso-positivo
+    // (ex: Kyogre 034/132 → Sabrina's Venomoth #34 de Gym Heroes).
+    final input = _normalize(recognizedText);
+    final validated = result.choices.where((c) {
+      final name = _norm(c.name);
+      if (name.isEmpty) return false;
+      if (input.contains(name)) {
+        if (debug) print('[matchGlobal] nome "${c.name}" encontrado no OCR (exato)'); // ignore: avoid_print
+        return true;
+      }
+      final sim = _bestSubstringSimilarity(input, name);
+      if (debug) print('[matchGlobal] nome "${c.name}" sim=${sim.toStringAsFixed(2)} (min=$_globalNameMinSim)'); // ignore: avoid_print
+      return sim >= _globalNameMinSim;
+    }).toList();
+
+    if (validated.isEmpty) {
+      if (debug) print('[matchGlobal] ✗ nenhum nome validou → rejeitado'); // ignore: avoid_print
+      return MatchResult(score: result.score);
+    }
+    if (debug) print('[matchGlobal] ✓ validados: ${validated.map((c) => "${c.id}(${c.name})").join(", ")}'); // ignore: avoid_print
+    return MatchResult(choices: validated, score: result.score);
+  }
+
+  /// Similaridade mínima do nome quando o set code não foi lido.
+  static const double _globalNameMinSim = 0.50;
+
+  MatchResult match(String recognizedText, List<TcgCard> candidates, {bool debug = false}) {
     if (candidates.isEmpty) return const MatchResult(score: 0);
 
     final input = _normalize(recognizedText);
@@ -51,6 +189,11 @@ class CardMatcher {
       ..sort((a, b) => b.score.compareTo(a.score));
 
     final best = scored.first;
+
+    if (debug) {
+      final top = scored.take(5).map((s) => '${s.card.id}(${s.card.name}#${s.card.localId})=${s.score.toStringAsFixed(2)}');
+      print('[match] top5: ${top.join(" | ")}'); // ignore: avoid_print
+    }
 
     // 1) MESMO NOME empatado (comum vs full art) e o número não decidiu →
     //    força a escolha entre essas versões (prioridade sobre "líder claro").

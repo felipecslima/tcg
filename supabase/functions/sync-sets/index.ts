@@ -6,6 +6,7 @@
 
 import {
   admin, authorized, bumpRefresh, conditionalGet, finishRun, json, startRun,
+  TCGDEX, LANG,
 } from "./sync.ts";
 
 Deno.serve(async (req: Request) => {
@@ -23,8 +24,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const list = got.body as any[];
-    const { data: existing } = await sb.from("sets").select("id,total");
-    const known = new Map((existing ?? []).map((s: any) => [s.id, s.total]));
+    const { data: existing } = await sb.from("sets").select("id,total,abbreviation");
+    const known = new Map((existing ?? []).map((s: any) => [s.id, { total: s.total, abbreviation: s.abbreviation }]));
 
     const rows = list.map((s) => ({
       id: s.id,
@@ -39,13 +40,36 @@ Deno.serve(async (req: Request) => {
     if (error) throw error;
     run.rows = rows.length;
 
+    // Sets sem abbreviation: busca endpoint detalhado (throttled, 5 em paralelo)
+    const missing = list.filter((s) => !known.get(s.id)?.abbreviation);
+    let abbrCount = 0;
+    for (let i = 0; i < missing.length; i += 5) {
+      const batch = missing.slice(i, i + 5);
+      const results = await Promise.allSettled(
+        batch.map(async (s: any) => {
+          const res = await fetch(`${TCGDEX}/${LANG}/sets/${s.id}`, {
+            headers: { Accept: "application/json" },
+          });
+          if (!res.ok) return null;
+          const detail = await res.json();
+          const abbr = detail?.abbreviation?.official;
+          if (abbr) {
+            await sb.from("sets").update({ abbreviation: abbr }).eq("id", s.id);
+            return abbr;
+          }
+          return null;
+        }),
+      );
+      abbrCount += results.filter((r) => r.status === "fulfilled" && r.value).length;
+    }
+
     const stale = list.filter(
-      (s) => !known.has(s.id) || known.get(s.id) !== (s.cardCount?.total ?? null),
+      (s) => !known.has(s.id) || known.get(s.id)?.total !== (s.cardCount?.total ?? null),
     );
     for (const s of stale) await bumpRefresh(sb, "set", s.id, 0);
 
-    await finishRun(run, { sets: rows.length, queued: stale.map((s) => s.id) });
-    return json({ changed: true, sets: rows.length, queued: stale.length });
+    await finishRun(run, { sets: rows.length, queued: stale.map((s) => s.id), abbreviations: abbrCount });
+    return json({ changed: true, sets: rows.length, queued: stale.length, abbreviations: abbrCount });
   } catch (e) {
     run.errors++;
     await finishRun(run, { error: String(e) });
