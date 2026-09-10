@@ -100,10 +100,11 @@ Sem o `--dart-define-from-file`, o app abre em `_MissingConfig`.
    218 sets + fila; `sync-set-cards` baixou 3 sets de teste (167 cartas brief);
    `refresh-prices` puxou preço da Charizard base1-4 (3 linhas em `card_prices`,
    carta enriquecida com hp/ataques/raridade).
-   **Falta:** rodar a carga inicial das cartas —
-   `select private_sync_invoke('sync-set-cards','limit=50')` ~5× no SQL editor
-   (só 3 dos 218 sets têm cartas). `refresh-prices` no cron só age em cartas de
-   coleção/wishlist; catálogo completo de preço vem sob demanda / lote manual.
+   **Carga inicial FEITA:** `cards` tem ~23.5k linhas brief, 214/218 sets
+   (jumbo/rc/sp/wp voltam `cards:[]` vazio na TCGdex `en` apesar do cardCount —
+   gap da API, não do código). Ataques/HP/preço ainda NÃO — só vêm no
+   `refresh-prices` (cartas de coleção/wishlist) ou ao abrir a carta. Pra um
+   backfill de detalhe: loop de `refresh-prices?card=<id>` ou uma função nova.
 4. **Camada de repositório "DB-first"** no Flutter: `CardRepository`,
    `SetRepository`, `PriceRepository`, `PokedexRepository` — leem da base,
    só chamam API no miss/stale, fazem upsert + gravam `api_cache_raw`.
