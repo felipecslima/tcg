@@ -59,16 +59,12 @@ class ProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadii.pill),
       child: Stack(
         children: [
-          Container(height: height, color: const Color(0x12FFFFFF)),
+          Container(height: height, color: AppColors.tint),
           FractionallySizedBox(
             widthFactor: value.clamp(0, 1),
             child: Container(
               height: height,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primaryDeep, AppColors.primary],
-                ),
-              ),
+              decoration: const BoxDecoration(gradient: AppColors.gradProgress),
             ),
           ),
         ],
@@ -100,21 +96,54 @@ class ArtPlaceholder extends StatelessWidget {
         width: width,
         height: height,
         decoration: BoxDecoration(
-          gradient: missing ? null : AppColors.artGradient,
-          color: missing ? AppColors.surface1 : null,
-          border: missing
-              ? Border.all(color: const Color(0x38C08FE8))
+          color: AppColors.surfaceSunken,
+          border: Border.all(
+            color: missing ? AppColors.border2 : AppColors.border1,
+          ),
+        ),
+        child: CustomPaint(
+          painter: _StripePainter(strong: missing),
+          child: missing
+              ? const Center(
+                  child: Text('?',
+                      style: TextStyle(
+                          color: AppColors.textDisabled, fontSize: 22)))
               : null,
         ),
-        child: missing
-            ? const Center(
-                child: Text('?',
-                    style: TextStyle(
-                        color: AppColors.textDisabled, fontSize: 22)))
-            : null,
       ),
     );
   }
+}
+
+/// Listrado a 115° — "aqui entra uma imagem que ainda não existe"
+/// (`design_system` § Fundos). Nunca usar como decoração.
+class _StripePainter extends CustomPainter {
+  const _StripePainter({this.strong = false});
+  final bool strong;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final band = strong ? 6.0 : 9.0;
+    final paint = Paint()
+      ..color = strong ? const Color(0x477A4BC4) : AppColors.stripe
+      ..strokeWidth = band;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    // 115° ≈ inclinação para a esquerda; varre além das bordas.
+    const dx = 0.466; // tan(115°-90°)
+    final span = size.width + size.height;
+    for (double x = -size.height * dx - span; x < span; x += band * 2) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x + size.height * dx, size.height),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_StripePainter old) => old.strong != strong;
 }
 
 /// Pílula de raridade / valor (dourada).
@@ -128,7 +157,7 @@ class RarityPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0x24F0C36B),
+        color: AppColors.goldSurface,
         borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(

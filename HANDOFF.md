@@ -1,9 +1,160 @@
 # Handoff — PokeCardex
 
-> ⬇️ **Fase atual (2026-09-10): Backend Supabase + design foundation + auth.**
-> A seção logo abaixo é o estado mais recente. O handoff do scanner MVP
-> (2026-09-09) continua válido e vem depois — o pipeline câmera→OCR→match
-> não foi tocado nesta fase.
+> ⬇️ **Fase atual (2026-09-10): Fase 3 — Telas e fluxos do design.**
+> Esta é a seção que interessa pra começar o trabalho. As fases 2 (backend +
+> auth) e 1 (scanner MVP) vêm depois e continuam válidas como referência.
+
+---
+
+# Fase 3 — Telas e fluxos do design (2026-09-10)
+
+## O que é esta fase
+Sair dos placeholders e construir as **10 telas reais do design** e os fluxos
+que ligam elas. Backend, auth e foundation visual já existem; o catálogo já
+está no Supabase. O que falta é o app de verdade: Coleção, Jornadas, Região,
+Busca, Perfil, e o caminho principal de scan (Escolher coleção → Escanear →
+Candidatos → Confirmar → Coleção).
+
+## Fontes de verdade — ler ANTES de codar qualquer tela
+| Arquivo | Para quê |
+|---|---|
+| `design_handoff_pokedex_tcg_atualizado/README.md` | **Spec canônica.** O que o app faz, tela a tela, navegação, modelo de estado, o que vem de backend, ordem de construção. |
+| `design_handoff_pokedex_tcg_atualizado/design_system/readme.md` | Fundações visuais: cor, tipo, espaçamento, sombras, bordas, animação, layout, iconografia, tom de voz. |
+| `design_handoff_pokedex_tcg_atualizado/design_system/tokens/*.css` | Valores finais tokenizados (já portados pra `lib/theme/`). |
+| `design_handoff_pokedex_tcg_atualizado/design_system/components/core/*.prompt.md` | Spec de cada componente core (Button, Card, Chip, ProgressBar, StatTile, ListRow, RarityPill, RadioRow, SectionLabel, CardArt). |
+| `design_handoff_pokedex_tcg_atualizado/prototype/Pokedex TCG.dc.html` | Protótipo interativo — abrir no navegador (com `support.js` na pasta), navegar as 10 telas, conferir estados/animação. É **referência de design, não código**. |
+| `design_handoff_pokedex_tcg_atualizado/Revisão de Produto.dc.html` | Memo de produto: o que construir primeiro / depois / nunca. |
+| Skill `/pokedex-tcg-design` | Mesma fonte, invocável, para gerar telas/assets no padrão da marca. |
+
+## Estado atual do código
+
+### Pronto e commitado (Fase 2)
+- Foundation visual em `lib/theme/` (cor, tipo, raio, sombra), tab bar
+  flutuante, componentes base em `lib/widgets/app_widgets.dart`.
+- Auth completo (`lib/screens/auth/`, `AuthGate`, `AuthService`).
+- `AppShell` com 5 abas — **tudo placeholder** exceto Escanear (abre o
+  scanner atual) e Perfil (email + logout).
+- Scanner MVP: `SetSelectionScreen` → `ScannerScreen` → `ReviewScreen`
+  (OCR-based, salva JSON local). Ver Fase 1.
+- Backend Supabase inteiro: catálogo (`sets` 218, `cards` ~23.5k brief,
+  `pokedex` 1025, `regions`), tabelas por-usuário com RLS, Edge Functions
+  de sync + `pg_cron`.
+
+### Não commitado (WIP em cima do working tree — conferir antes de mexer)
+`git status` mostra modificados:
+- `lib/theme/app_colors.dart` `app_theme.dart` `app_typography.dart` —
+  **migração dark → light já feita.** O design mudou pra modo claro (fundo
+  lilás claríssimo `#FBF9FD`, superfícies brancas). `AppTheme.light` é o tema
+  ativo em `main.dart`. Os tokens batem com `tokens/colors.css` novo.
+- `lib/widgets/app_widgets.dart` `floating_tab_bar.dart` `auth_scaffold.dart`
+  `card_detail_screen.dart` — ajustes do light.
+- `design_handoff_pokedex_tcg/` (pasta antiga) deletada; `design_system/` na
+  raiz e `design_handoff_pokedex_tcg_atualizado/` são o pacote novo.
+
+**Primeira ação da fase:** rodar `flutter analyze` + `flutter test`, revisar
+esse diff, e commitar a migração light como base limpa antes de construir tela.
+
+### Não existe ainda (é o trabalho)
+- Camada de repositório **DB-first** (Fase 2 pendência #4) — nenhuma tela
+  deve chamar API direto. `CardRepository` / `SetRepository` /
+  `PriceRepository` / `PokedexRepository` / `CollectionRepository`: leem do
+  Supabase, chamam TCGdex só em miss/stale, fazem upsert + gravam
+  `api_cache_raw`. TTL: catálogo 30d, preço 24h, pokédex ~infinito. Offline:
+  serve dado vencido.
+- As 10 telas do design (só o scanner tem esqueleto).
+- Ligação do motor de art-matching (Dart, portado — ver memória
+  `art-engine-dart-port`) com a tela de **Candidatos**.
+
+## Decisões a tomar antes de escrever tela (pra não retrabalhar)
+1. **Gerência de estado.** Hoje é `setState` puro. Coleção do usuário, filtros,
+   toast e o objeto de sessão de scan são estado compartilhado entre telas —
+   decidir: `provider` / `riverpod` / `ChangeNotifier` manual. Recomendação:
+   `provider` + `ChangeNotifier` (leve, sem geração de código, 6 usuários).
+2. **Navegação.** `Navigator` 1.0 imperativo hoje. O README descreve um grafo
+   de rotas com `prev` pra "Voltar" contextual do detalhe. `go_router` resolve
+   deep-link e o back contextual, mas adiciona peso. Recomendação: manter
+   Navigator 1.0 + passar `origin` por argumento (grafo é pequeno).
+3. **Fluxo de scan real.** O protótipo simula 1300ms. Na implementação:
+   câmera ao vivo → captura → motor de arte (Dart) roda contra as cartas do
+   set escolhido → top-N candidatos com score → sheet de Candidatos. Definir
+   onde o motor roda (isolate) e o mínimo de 600ms de animação.
+4. **Modelo de dados unificado.** Hoje há `TcgCard` (brief) e `CardDetail`
+   (completo) separados + o modelo de carta do README
+   (`{id,name,set,num,rarity,price,delta,art,cond,finish,qty,region}`).
+   Consolidar num modelo de domínio antes de espalhar pelas telas.
+
+## As 10 telas (README §Telas) — mapa de construção
+| # | Tela / rota | Aba | Dados | Depende de | Prioridade |
+|---|---|---|---|---|---|
+| 1 | Escolher coleção (`setpick`) | Escanear | `sets` + progresso do usuário | SetRepository, CollectionRepository | **P0** (entrada do scan) |
+| 2 | Escanear (`scan`) | Escanear | câmera + set ativo | motor de arte Dart | **P0** |
+| 3 | Candidatos (`candidates`) — sheet | — | top-N do motor | motor de arte | **P0** |
+| 4 | Confirmar carta (`confirm`) | — | carta escolhida + coleções destino | CardRepository, CollectionRepository | **P0** |
+| 7 | Minhas cartas (`collection`) | Coleção | `collection_cards` + join catálogo | CollectionRepository | **P0** (aba default, fim do fluxo) |
+| 8 | Detalhe da carta (`detail`) | — | carta completa (hp, ataques, preço) | CardRepository, PriceRepository | **P1** (adaptar `CardDetailScreen`) |
+| 9 | Busca (`search`) | Busca | catálogo + posse | CardRepository | **P1** (tem "+ adicionar manual" → Confirmar) |
+| 5 | Jornadas (`journeys`) | Jornadas | `regions` + `pokedex` + posse por região | PokedexRepository, CollectionRepository | **P2** |
+| 6 | Cartas da região (`region`) | Jornadas | `pokedex` da região + silhuetas | PokedexRepository | **P2** |
+| 10 | Perfil (`profile`) | Perfil | `profiles` (level, xp, streak) + conquistas | ProfileRepository | **P2** |
+
+Navegação e visibilidade da tab bar: README §Navegação (tab bar oculta em
+`candidates`, `confirm`, `detail`). Todo conteúdo rolável: `padding-bottom 120`.
+
+## Ordem de construção sugerida
+0. Commitar a migração light. Escolher state mgmt + navegação (acima).
+1. **Camada de repositório DB-first** + modelo de domínio unificado. Sem isso
+   toda tela vira dívida.
+2. **Caminho principal, ponta a ponta:** setpick → scan → candidates → confirm
+   → collection (+ toast). É o app útil mínimo.
+   - Ligar o motor de arte Dart aos Candidatos (validar em câmera real —
+     memória `art-engine-dart-port` diz que isso nunca foi testado).
+3. **Detalhe** (adaptar `CardDetailScreen` ao tema light + grade 2×2) e
+   **Busca** (+ adicionar manual).
+4. **Casos chatos** (README §"Estados ainda não desenhados"): sem permissão de
+   câmera, nada reconhecido, offline, coleção vazia (1º uso), busca sem
+   resultado, preço indisponível.
+5. **Jornadas + Região + Perfil.**
+6. Depois: ver coleção das amigas / achar quem tem a repetida que a outra
+   quer (README diz que vale mais que perfil/conquistas/níveis).
+
+## Decisões de produto travadas — NÃO reabrir
+- **Dinheiro fica fora do centro.** Sem gráfico de preço, sem variação % em
+  verde/vermelho, sem preço na navegação. Valor total aparece **uma vez** (hero
+  de Minhas cartas) e como **uma célula** no detalhe. É curiosidade, não a tela.
+- **O reconhecimento nunca finge certeza.** Escolhe a coleção antes → app
+  propõe 2–3 candidatos com % → ela decide. Todo passo obrigatório tem saída
+  ("não sei a coleção", "nenhuma dessas", "adicionar manualmente").
+- **Sem conta/telemetria/escala/monetização.** 6 usuários, é um presente.
+- Estado de **conservação não é pedido no salvamento** — só no detalhe, depois.
+- Modo lote é só um toggle visual por enquanto (backlog).
+- Ícones do protótipo são glifos Unicode → trocar por SF Symbols / Lucide.
+- Nomes/artes de carta são placeholders — nada de marca/arte oficial de TCG.
+
+## Pendências da Fase 2 ainda abertas (bloqueiam ou tangenciam esta fase)
+- **#1 — passo manual no painel Supabase:** Authentication → Providers → Email
+  → desligar "Confirm email". Sem isso o signup não gera sessão.
+- **#4 — camada de repositório DB-first** (agora é P0 desta fase, ver acima).
+- **#6 — fontes:** hoje `google_fonts` baixa em runtime. README pede `.ttf`
+  empacotado em `assets/fonts/` antes do release (uso offline em loja/encontro).
+- **#7 — ataques/HP/preço:** só vêm no endpoint de carta individual da TCGdex
+  ou no `refresh-prices`. `cards.attacks` (jsonb) já aceita. Detalhe precisa
+  disparar fetch on-demand se stale.
+- Nomes da pokédex vêm da PokéAPI em minúsculo com hífen (`mr-mime`) —
+  normalizar pra display.
+
+## Como rodar
+```bash
+flutter run --dart-define-from-file=env.json
+```
+Sem `--dart-define-from-file`, abre em `_MissingConfig`.
+Protótipo de referência: abrir `design_handoff_pokedex_tcg_atualizado/prototype/Pokedex TCG.dc.html` no navegador.
+
+## Definition of done (por tela)
+- `flutter analyze` limpo, `flutter test` verde.
+- Tokens do design system, zero valor hard-coded fora de `lib/theme/`.
+- Dados via repositório (nunca API direto), funciona offline com dado em cache.
+- Estados vazio / carregando / erro desenhados.
+- Navegação e visibilidade da tab bar conforme README §Navegação.
 
 ---
 

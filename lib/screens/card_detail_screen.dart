@@ -4,6 +4,7 @@ import '../models/card_detail.dart';
 import '../models/tcg_card.dart';
 import '../services/fx_service.dart';
 import '../services/tcgdex_api_service.dart';
+import '../theme/app_colors.dart';
 
 /// Página da carta escolhida: dados completos + valores de mercado
 /// (Cardmarket / TCGplayer) da TCGdex.
@@ -95,7 +96,7 @@ class _DetailBody extends StatelessWidget {
         Text(
           '#${detail.localId}${total != 0 ? '/$total' : ''}'
           '${detail.setName.isNotEmpty ? ' · ${detail.setName}' : ''}',
-          style: t.bodyMedium?.copyWith(color: Colors.black54),
+          style: t.bodyMedium?.copyWith(color: AppColors.text3),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -134,7 +135,7 @@ class _DetailBody extends StatelessWidget {
         if (detail.illustrator != null) ...[
           const SizedBox(height: 20),
           Text('Ilustração: ${detail.illustrator}',
-              style: t.bodySmall?.copyWith(color: Colors.black45)),
+              style: t.bodySmall?.copyWith(color: AppColors.text4)),
         ],
       ],
     );
@@ -206,10 +207,10 @@ class _PricingCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(left: 8, bottom: 3),
                     child: Text(_orig('EUR', cm.trend ?? cm.avg),
-                        style: t.bodySmall?.copyWith(color: Colors.black45)),
+                        style: t.bodySmall?.copyWith(color: AppColors.text4)),
                   ),
               ]),
-              Text('tendência', style: t.bodySmall?.copyWith(color: Colors.black45)),
+              Text('tendência', style: t.bodySmall?.copyWith(color: AppColors.text4)),
               const SizedBox(height: 8),
               Wrap(spacing: 16, runSpacing: 4, children: [
                 _kv('média', _v('EUR', cm.avg)),
@@ -252,7 +253,7 @@ class _PricingCard extends StatelessWidget {
                                 style: t.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
                             Text(
                               'mín ${_v('USD', e.value.low)} · méd ${_v('USD', e.value.mid)}',
-                              style: t.bodySmall?.copyWith(color: Colors.black45),
+                              style: t.bodySmall?.copyWith(color: AppColors.text4),
                             ),
                           ],
                         ),
@@ -264,7 +265,7 @@ class _PricingCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               _footer(),
-              style: t.bodySmall?.copyWith(color: Colors.black38),
+              style: t.bodySmall?.copyWith(color: AppColors.text6),
             ),
           ],
         ),
@@ -288,7 +289,7 @@ class _PricingCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(v, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text(k, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+          Text(k, style: const TextStyle(fontSize: 11, color: AppColors.text4)),
         ],
       );
 
@@ -314,7 +315,7 @@ class _AttackTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(right: 6),
                   child: Text('(${attack.cost.join(' ')})',
-                      style: t.bodySmall?.copyWith(color: Colors.black45)),
+                      style: t.bodySmall?.copyWith(color: AppColors.text4)),
                 ),
               Expanded(
                 child: Text(attack.name,
@@ -373,13 +374,13 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+            const Icon(Icons.cloud_off, size: 48, color: AppColors.text4),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text('Não consegui carregar os dados da carta.\n$message',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black54)),
+                  style: const TextStyle(color: AppColors.text3)),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(

@@ -1,0 +1,59 @@
+:root {
+  /* Roxo — escala de marca (inspiração: evolução psíquica do Eevee) */
+  --ds-purple-900: #3A1E63;
+  --ds-purple-800: #5E2E9E;
+  --ds-purple-700: #6B3FB0;
+  --ds-purple-600: #7A4BC4;
+  --ds-purple-500: #9463DA;
+  --ds-purple-400: #A76FDF;
+  --ds-purple-300: #B07CE8;
+  --ds-lilac-200: #E4D9F4;
+  --ds-lilac-100: #EFEAF6;
+  --ds-lilac-050: #FBF9FD;
+
+  /* Tinta — texto e ícones */
+  --ds-ink-1: #241a35;
+  --ds-ink-2: #4a3f5c;
+  --ds-ink-3: #645878;
+  --ds-ink-4: #6E6386;
+
+  /* Semânticas — todas passam 4.5:1 sobre --ds-bg */
+  --ds-gold: #8A5C10;
+  --ds-gold-surface: rgba(169, 116, 26, .13);
+  --ds-positive: #1F7346;
+  --ds-negative: #C04A4A;
+
+  /* Papel */
+  --ds-bg: #FBF9FD;
+  --ds-bg-deep: #EFEAF6;
+  --ds-surface: #FFFFFF;
+  --ds-surface-sunken: #FAF7FD;
+  --ds-scrim: rgba(255, 255, 255, .88);
+
+  /* Bordas e tintas */
+  --ds-border: rgba(122, 75, 196, .12);
+  --ds-border-strong: rgba(122, 75, 196, .22);
+  --ds-border-focus: var(--ds-purple-600);
+  --ds-tint-soft: rgba(122, 75, 196, .06);
+  --ds-tint: rgba(122, 75, 196, .12);
+  --ds-tint-strong: rgba(122, 75, 196, .18);
+
+  /* Semânticas de papel */
+  --ds-text-primary: var(--ds-ink-1);
+  --ds-text-secondary: var(--ds-ink-3);
+  --ds-text-muted: var(--ds-ink-4);
+  --ds-text-on-purple: #FFFFFF;
+  --ds-action: var(--ds-purple-600);
+  --ds-action-hover: var(--ds-purple-500);
+  --ds-action-strong: var(--ds-purple-800);
+
+  /* Gradientes */
+  --ds-grad-hero: linear-gradient(135deg, #5A3199, #7F4FC4);
+  --ds-grad-progress: linear-gradient(90deg, #6B3FB0, #A76FDF);
+  --ds-grad-node: linear-gradient(150deg, #6B3FB0, #A76FDF);
+  --ds-grad-veil: linear-gradient(180deg, rgba(122, 75, 196, .22), var(--ds-bg));
+
+  /* Placeholder listrado — arte de carta / câmera / avatar ausentes */
+  --ds-placeholder: repeating-linear-gradient(115deg, rgba(122,75,196,.09) 0 9px, rgba(122,75,196,.03) 9px 18px);
+  --ds-placeholder-strong: repeating-linear-gradient(115deg, rgba(122,75,196,.28) 0 6px, rgba(122,75,196,.1) 6px 12px);
+}

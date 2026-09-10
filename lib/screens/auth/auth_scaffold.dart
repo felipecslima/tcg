@@ -24,7 +24,7 @@ class AuthScaffold extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0x38C08FE8), AppColors.bgScreen],
+            colors: [Color(0x387A4BC4), AppColors.bg],
             stops: [0, 0.4],
           ),
         ),

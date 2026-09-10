@@ -36,9 +36,10 @@ class FloatingTabBar extends StatelessWidget {
           child: Container(
             height: 66,
             decoration: BoxDecoration(
-              color: AppColors.bgTabBar,
+              color: AppColors.scrim,
               borderRadius: BorderRadius.circular(AppRadii.tabBar),
-              border: Border.all(color: const Color(0x29C08FE8)),
+              border: Border.all(color: AppColors.border1),
+              boxShadow: AppShadows.raised,
             ),
             child: Row(
               children: [

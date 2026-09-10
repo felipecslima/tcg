@@ -28,7 +28,7 @@ class PokeCardexApp extends StatelessWidget {
     return MaterialApp(
       title: 'PokéCardex',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
       home: Config.isConfigured ? const AuthGate() : const _MissingConfig(),
     );
   }
