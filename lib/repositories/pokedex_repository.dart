@@ -61,6 +61,7 @@ abstract class PokedexStore {
   Future<List<Map<String, dynamic>>> fetchRegions();
   Future<List<Map<String, dynamic>>> fetchPokedexByRegion(String regionId);
   Future<Map<String, dynamic>?> fetchByNationalDexId(int id);
+  Future<List<Map<String, dynamic>>> fetchByNationalDexIds(List<int> ids);
 }
 
 class SupabasePokedexStore implements PokedexStore {
@@ -86,6 +87,13 @@ class SupabasePokedexStore implements PokedexStore {
   @override
   Future<Map<String, dynamic>?> fetchByNationalDexId(int id) async {
     return await _client.from('pokedex').select().eq('national_dex_id', id).maybeSingle();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchByNationalDexIds(List<int> ids) async {
+    if (ids.isEmpty) return const [];
+    final rows = await _client.from('pokedex').select().inFilter('national_dex_id', ids);
+    return (rows as List).cast<Map<String, dynamic>>();
   }
 }
 
@@ -113,5 +121,12 @@ class PokedexRepository {
   Future<PokedexEntry?> fetchByNationalDexId(int id) async {
     final row = await _store.fetchByNationalDexId(id);
     return row == null ? null : PokedexEntry.fromSupabaseRow(row);
+  }
+
+  /// IDs de região distintos entre os pokémons dados — usado no hero da
+  /// Coleção ("{n} regiões").
+  Future<Set<String>> regionIdsForNationalDexIds(List<int> ids) async {
+    final rows = await _store.fetchByNationalDexIds(ids);
+    return rows.map((r) => r['region_id'] as String?).whereType<String>().toSet();
   }
 }

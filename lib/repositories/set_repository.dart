@@ -10,17 +10,20 @@ class CardSetBrief {
     required this.id,
     required this.name,
     this.series,
+    this.abbreviation,
     this.printedTotal = 0,
     this.total = 0,
     this.releaseDate,
     this.symbolUrl,
     this.logoUrl,
     this.updatedAt,
+    this.translations = const {},
   });
 
   final String id;
   final String name;
   final String? series;
+  final String? abbreviation;
   final int printedTotal;
   final int total;
   final DateTime? releaseDate;
@@ -28,16 +31,29 @@ class CardSetBrief {
   final String? logoUrl;
   final DateTime? updatedAt;
 
+  /// Nome do set por idioma (`{"en": "...", "pt": "..."}`). O app é sempre
+  /// PT-BR, mas o OCR do scanner pode ler o nome impresso na carta em
+  /// qualquer idioma suportado — por isso o matching precisa do nome
+  /// original, não só do nome exibido.
+  final Map<String, String> translations;
+
+  /// Nome no idioma pedido, com fallback pt → en → [name].
+  String nameIn(String lang) => translations[lang] ?? translations['pt'] ?? translations['en'] ?? name;
+
   factory CardSetBrief.fromSupabaseRow(Map<String, dynamic> row) => CardSetBrief(
         id: row['id'] as String,
         name: row['name'] as String? ?? '',
         series: row['series'] as String?,
+        abbreviation: row['abbreviation'] as String?,
         printedTotal: row['printed_total'] as int? ?? 0,
         total: row['total'] as int? ?? 0,
         releaseDate: DateTime.tryParse(row['release_date'] as String? ?? ''),
         symbolUrl: row['symbol_url'] as String?,
         logoUrl: row['logo_url'] as String?,
         updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
+        translations: (row['translations'] as Map<String, dynamic>?)
+                ?.map((k, v) => MapEntry(k, v.toString())) ??
+            const {},
       );
 
   factory CardSetBrief.fromTcgdexBrief(TcgSetBrief b) => CardSetBrief(
@@ -108,7 +124,7 @@ class CardSetRepository {
   final TcgdexApiService _api;
   final ApiCacheLogger _cacheLogger;
 
-  Future<List<CardSetBrief>> fetchAllSets({String language = 'en'}) async {
+  Future<List<CardSetBrief>> fetchAllSets({String language = 'pt'}) async {
     var rows = await _store.fetchAll();
     final stale = rows.isEmpty || isStale(freshestUpdatedAt(rows), _ttl);
     if (stale) {
@@ -128,7 +144,21 @@ class CardSetRepository {
     return rows.map(CardSetBrief.fromSupabaseRow).toList();
   }
 
-  Future<CardSetBrief?> fetchSetById(String id, {String language = 'en'}) async {
+  /// Sets que batem com a abreviação impressa na carta (ex: `MEG`, `SSP`).
+  /// Retorna da cache local (fetchAllSets preenche), sem hit extra no banco.
+  Future<List<CardSetBrief>> fetchSetsByAbbreviation(String abbreviation) async {
+    final all = await fetchAllSets();
+    final upper = abbreviation.toUpperCase();
+    return all.where((s) => s.abbreviation?.toUpperCase() == upper).toList();
+  }
+
+  /// Sets com o mesmo printedTotal (fallback quando a abreviação não bate).
+  Future<List<CardSetBrief>> fetchSetsByPrintedTotal(int printedTotal) async {
+    final all = await fetchAllSets();
+    return all.where((s) => s.printedTotal == printedTotal).toList();
+  }
+
+  Future<CardSetBrief?> fetchSetById(String id, {String language = 'pt'}) async {
     var row = await _store.fetchById(id);
     if (row == null || isStale(DateTime.tryParse(row['updated_at'] as String? ?? ''), _ttl)) {
       try {

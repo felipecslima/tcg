@@ -23,6 +23,10 @@ dependencies:
   # Backend (auth + Postgres + storage)
   supabase_flutter: ^2.8.0
 
+  # Gerência de estado compartilhado entre abas (ex: toast + troca de aba
+  # depois de salvar na coleção)
+  provider: ^6.1.2
+
   # Fontes do design (Sora / DM Sans / DM Mono) — cacheadas em runtime.
   # TODO: empacotar os .ttf em assets/fonts/ antes do release (design pede offline).
   google_fonts: ^6.2.1

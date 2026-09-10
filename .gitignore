@@ -125,3 +125,6 @@ coverage/
 
 # Supabase keys for --dart-define-from-file
 /env.json
+
+# Supabase CLI temp (project ref, postgres version)
+supabase/.temp/

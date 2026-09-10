@@ -11,6 +11,18 @@ class _FakeCollectionStore implements CollectionStore {
   Future<List<Map<String, dynamic>>> fetchCollectionCards(String collectionId) async => const [];
 
   @override
+  Future<List<String>> fetchCardIdsInSet(String setId) async => const [];
+
+  @override
+  Future<List<String>> fetchOwnedCardIds(List<String> cardIds) async => const [];
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchOwnedQuantities(List<String> cardIds) async => const [];
+
+  @override
+  Future<List<String>> fetchAllOwnedCardIds() async => const [];
+
+  @override
   Future<Map<String, dynamic>> upsertCard({
     required String userId,
     required String collectionId,

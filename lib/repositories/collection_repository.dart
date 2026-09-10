@@ -59,6 +59,10 @@ class CollectionCardEntry {
 abstract class CollectionStore {
   Future<List<Map<String, dynamic>>> fetchCollections();
   Future<List<Map<String, dynamic>>> fetchCollectionCards(String collectionId);
+  Future<List<String>> fetchCardIdsInSet(String setId);
+  Future<List<String>> fetchOwnedCardIds(List<String> cardIds);
+  Future<List<Map<String, dynamic>>> fetchOwnedQuantities(List<String> cardIds);
+  Future<List<String>> fetchAllOwnedCardIds();
   Future<Map<String, dynamic>> upsertCard({
     required String userId,
     required String collectionId,
@@ -87,6 +91,36 @@ class SupabaseCollectionStore implements CollectionStore {
         .eq('collection_id', collectionId)
         .order('added_at', ascending: false);
     return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<String>> fetchCardIdsInSet(String setId) async {
+    final rows = await _client.from('cards').select('id').eq('set_id', setId);
+    return (rows as List).map((r) => r['id'] as String).toList();
+  }
+
+  @override
+  Future<List<String>> fetchOwnedCardIds(List<String> cardIds) async {
+    if (cardIds.isEmpty) return const [];
+    final rows =
+        await _client.from('collection_cards').select('card_id').inFilter('card_id', cardIds);
+    return (rows as List).map((r) => r['card_id'] as String).toSet().toList();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchOwnedQuantities(List<String> cardIds) async {
+    if (cardIds.isEmpty) return const [];
+    final rows = await _client
+        .from('collection_cards')
+        .select('card_id, quantity')
+        .inFilter('card_id', cardIds);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<List<String>> fetchAllOwnedCardIds() async {
+    final rows = await _client.from('collection_cards').select('card_id');
+    return (rows as List).map((r) => r['card_id'] as String).toSet().toList();
   }
 
   /// Chama `upsert_collection_card` (migration `12_collection_cards_upsert`)
@@ -138,6 +172,33 @@ class CollectionRepository {
   Future<List<CollectionCardEntry>> fetchCollectionCards(String collectionId) async {
     final rows = await _store.fetchCollectionCards(collectionId);
     return rows.map(CollectionCardEntry.fromSupabaseRow).toList();
+  }
+
+  /// Quantas cartas distintas do set a usuária já tem (qualquer binder) —
+  /// usado na barra de progresso da tela Escolher coleção.
+  Future<int> countOwnedInSet(String setId) async {
+    final allIds = await _store.fetchCardIdsInSet(setId);
+    if (allIds.isEmpty) return 0;
+    final owned = await _store.fetchOwnedCardIds(allIds);
+    return owned.length;
+  }
+
+  /// Todos os card_ids que a usuária possui (qualquer binder).
+  Future<Set<String>> fetchAllOwnedCardIds() async {
+    final ids = await _store.fetchAllOwnedCardIds();
+    return ids.toSet();
+  }
+
+  /// Mapa card_id → quantidade total (soma de todos os binders).
+  Future<Map<String, int>> ownedQuantityByCardId(List<String> cardIds) async {
+    final rows = await _store.fetchOwnedQuantities(cardIds);
+    final map = <String, int>{};
+    for (final r in rows) {
+      final id = r['card_id'] as String;
+      final qty = r['quantity'] as int? ?? 1;
+      map[id] = (map[id] ?? 0) + qty;
+    }
+    return map;
   }
 
   /// Adiciona (ou soma quantidade a) uma carta num binder — o "Salvar na

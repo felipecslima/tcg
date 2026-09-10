@@ -1,394 +1,549 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 
-import '../models/card_detail.dart';
-import '../models/tcg_card.dart';
-import '../services/fx_service.dart';
-import '../services/tcgdex_api_service.dart';
+import '../models/card.dart';
+import '../models/card_detail.dart' show CardAttack;
+import '../repositories/card_repository.dart';
+import '../repositories/collection_repository.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
+import '../widgets/app_widgets.dart';
 
-/// Página da carta escolhida: dados completos + valores de mercado
-/// (Cardmarket / TCGplayer) da TCGdex.
+/// Tela de detalhe de uma carta — destino de Coleção, Busca, Candidatos.
+/// Recebe um [Card] (pode ser brief) e um [CollectionCardEntry] opcional
+/// (quando vem da coleção, mostra qty/condition/finish).
 class CardDetailScreen extends StatefulWidget {
   const CardDetailScreen({
     super.key,
     required this.card,
-    required this.language,
+    this.entry,
+    this.origin = 'Voltar',
   });
 
-  final TcgCard card;
-  final String language;
+  final Card card;
+  final CollectionCardEntry? entry;
+  final String origin;
 
   @override
   State<CardDetailScreen> createState() => _CardDetailScreenState();
 }
 
 class _CardDetailScreenState extends State<CardDetailScreen> {
-  final _api = TcgdexApiService();
-  late Future<CardDetail> _future;
-  FxRates? _fx; // câmbio pra mostrar em reais; null = mostra em € / US$
+  late Card _card;
+  bool _loading = false;
+  bool _detailLoaded = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _future = _api.fetchCard(widget.card.id, language: widget.language);
-    FxService.load().then((r) {
-      if (mounted && r != null) setState(() => _fx = r);
-    });
+    _card = widget.card;
+    if (_card.isBrief) {
+      _fetchDetail();
+    } else {
+      _detailLoaded = true;
+    }
   }
 
-  @override
-  void dispose() {
-    _api.dispose();
-    super.dispose();
-  }
-
-  void _reload() {
+  Future<void> _fetchDetail() async {
     setState(() {
-      _future = _api.fetchCard(widget.card.id, language: widget.language);
+      _loading = true;
+      _error = null;
     });
+    try {
+      final detail = await CardRepository().fetchCardDetail(_card.id);
+      if (!mounted) return;
+      setState(() {
+        _card = detail.copyWith(priceBrl: widget.card.priceBrl);
+        _loading = false;
+        _detailLoaded = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.card.name)),
-      body: FutureBuilder<CardDetail>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError || !snap.hasData) {
-            return _ErrorView(onRetry: _reload, message: '${snap.error ?? "sem dados"}');
-          }
-          return _DetailBody(detail: snap.data!, fallback: widget.card, fx: _fx);
-        },
-      ),
+      backgroundColor: AppColors.bg,
+      body: _error != null && !_detailLoaded
+          ? _ErrorView(message: _error!, onRetry: _fetchDetail)
+          : _DetailBody(
+              card: _card,
+              entry: widget.entry,
+              origin: widget.origin,
+              loading: _loading,
+              detailLoaded: _detailLoaded,
+            ),
     );
   }
 }
 
 class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.detail, required this.fallback, this.fx});
-  final CardDetail detail;
-  final TcgCard fallback;
-  final FxRates? fx;
+  const _DetailBody({
+    required this.card,
+    this.entry,
+    required this.origin,
+    this.loading = false,
+    this.detailLoaded = false,
+  });
+
+  final Card card;
+  final CollectionCardEntry? entry;
+  final String origin;
+  final bool loading;
+  final bool detailLoaded;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final img = detail.imageUrl('high') ?? fallback.thumbnailUrl;
-    final total = detail.printedTotal != 0 ? detail.printedTotal : fallback.printedTotal;
+    final imgUrl = card.imageUrl('high') ?? card.thumbnailUrl;
+    final top = MediaQuery.of(context).padding.top;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
       children: [
-        if (img != null)
-          Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.network(img, height: 380, fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const SizedBox(height: 380)),
+        _HeroZone(
+          imageUrl: imgUrl,
+          origin: origin,
+          topPadding: top,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 18),
+              Text(card.name, style: AppType.cardTitle),
+              const SizedBox(height: 6),
+              _MetadataLine(card: card),
+              if (loading) ...[
+                const SizedBox(height: 24),
+                const Center(child: CircularProgressIndicator()),
+              ],
+              if (detailLoaded) ...[
+                if (card.attacks.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  _AttacksCard(attacks: card.attacks, hp: card.hp),
+                ],
+                const SizedBox(height: 20),
+                _StatsGrid(card: card, entry: entry),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroZone extends StatelessWidget {
+  const _HeroZone({
+    required this.imageUrl,
+    required this.origin,
+    required this.topPadding,
+  });
+
+  final String? imageUrl;
+  final String origin;
+  final double topPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.gradVeil),
+      child: Column(
+        children: [
+          SizedBox(height: topPadding + 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _BackPill(label: origin, onTap: () => Navigator.of(context).pop()),
             ),
           ),
-        const SizedBox(height: 16),
-        Text(detail.name, style: t.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-        Text(
-          '#${detail.localId}${total != 0 ? '/$total' : ''}'
-          '${detail.setName.isNotEmpty ? ' · ${detail.setName}' : ''}',
-          style: t.bodyMedium?.copyWith(color: AppColors.text3),
+          const SizedBox(height: 16),
+          Center(
+            child: imageUrl != null
+                ? Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: AppShadows.hero,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        imageUrl!,
+                        width: 190,
+                        height: 265,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const ArtPlaceholder(width: 190, height: 265, radius: 14),
+                      ),
+                    ),
+                  )
+                : const ArtPlaceholder(width: 190, height: 265, radius: 14),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackPill extends StatelessWidget {
+  const _BackPill({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+          border: Border.all(color: AppColors.border1),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (detail.rarity != null) _Chip(detail.rarity!),
-            if (detail.stage != null) _Chip(detail.stage!),
-            if (detail.category != null) _Chip(detail.category!),
-            for (final ty in detail.types) _Chip(ty),
-            if (detail.hp != null) _Chip('${detail.hp} PS'),
-            if (detail.regulationMark != null) _Chip('Marca ${detail.regulationMark}'),
+            const Icon(Icons.arrow_back_ios, size: 13, color: AppColors.text2),
+            const SizedBox(width: 4),
+            Text(label, style: AppType.button),
           ],
         ),
-        const SizedBox(height: 20),
+      ),
+    );
+  }
+}
 
-        const _SectionTitle('Valores de mercado'),
-        _PricingCard(detail.pricing, fx: fx, updatedAt: detail.updated),
+class _MetadataLine extends StatelessWidget {
+  const _MetadataLine({required this.card});
+  final Card card;
 
-        if (detail.attacks.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const _SectionTitle('Ataques'),
-          for (final a in detail.attacks) _AttackTile(a),
+  @override
+  Widget build(BuildContext context) {
+    final parts = <InlineSpan>[];
+
+    if (card.setName.isNotEmpty) {
+      parts.add(TextSpan(text: card.setName));
+    }
+    if (card.localId.isNotEmpty) {
+      if (parts.isNotEmpty) parts.add(const TextSpan(text: ' · '));
+      final num = card.printedTotal > 0
+          ? '${card.localId}/${card.printedTotal}'
+          : card.localId;
+      parts.add(TextSpan(text: num));
+    }
+    if (card.rarity != null) {
+      if (parts.isNotEmpty) parts.add(const TextSpan(text: ' · '));
+      parts.add(TextSpan(
+        text: card.rarity!,
+        style: AppType.caption.copyWith(color: AppColors.gold),
+      ));
+    }
+
+    if (parts.isEmpty) return const SizedBox.shrink();
+
+    return RichText(
+      text: TextSpan(style: AppType.caption, children: parts),
+    );
+  }
+}
+
+class _AttacksCard extends StatelessWidget {
+  const _AttacksCard({required this.attacks, this.hp});
+  final List<CardAttack> attacks;
+  final int? hp;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.border1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('ATAQUES', style: AppType.sectionLabel),
+              const Spacer(),
+              if (hp != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldSurface,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                  ),
+                  child: Text(
+                    '$hp PS',
+                    style: AppType.mono.copyWith(color: AppColors.gold, fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (var i = 0; i < attacks.length; i++) ...[
+            if (i > 0) ...[
+              const SizedBox(height: 6),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+            ],
+            _AttackRow(attack: attacks[i]),
+          ],
         ],
+      ),
+    );
+  }
+}
 
-        if (detail.weaknesses.isNotEmpty || detail.retreat != null) ...[
-          const SizedBox(height: 20),
-          const _SectionTitle('Combate'),
-          if (detail.weaknesses.isNotEmpty)
-            Text('Fraqueza: ${detail.weaknesses.map((w) => '${w.type} ${w.value ?? ''}'.trim()).join(', ')}',
-                style: t.bodyMedium),
-          if (detail.retreat != null)
-            Text('Custo de recuo: ${detail.retreat}', style: t.bodyMedium),
-        ],
+class _AttackRow extends StatelessWidget {
+  const _AttackRow({required this.attack});
+  final CardAttack attack;
 
-        if (detail.illustrator != null) ...[
-          const SizedBox(height: 20),
-          Text('Ilustração: ${detail.illustrator}',
-              style: t.bodySmall?.copyWith(color: AppColors.text4)),
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (attack.cost.isNotEmpty) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final energy in attack.cost)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _EnergyCost(type: energy),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(attack.name, style: AppType.listTitle),
+            ),
+            if (attack.damage != null && attack.damage!.isNotEmpty)
+              Text(attack.damage!, style: AppType.mono.copyWith(fontSize: 16)),
+          ],
+        ),
+        if (attack.effect != null && attack.effect!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(attack.effect!, style: AppType.bodySm.copyWith(color: AppColors.text3)),
         ],
       ],
     );
   }
 }
 
-class _PricingCard extends StatelessWidget {
-  const _PricingCard(this.pricing, {this.fx, this.updatedAt});
-  final MarketPricing? pricing;
-  final FxRates? fx;
-  final DateTime? updatedAt;
+class _EnergyCost extends StatelessWidget {
+  const _EnergyCost({required this.type});
+  final String type;
 
-  /// Valor no display: em reais se tem câmbio, senão na moeda original.
-  String _v(String unit, double? value) {
-    if (value == null) return '—';
-    if (fx != null) return formatBrl(fx!.toBrl(unit, value));
-    return '${unit == 'USD' ? 'US\$ ' : '€ '}${value.toStringAsFixed(2)}';
-  }
-
-  /// A moeda original, pra mostrar pequeno ao lado do valor em reais.
-  String _orig(String unit, double? value) {
-    if (value == null || fx == null) return '';
-    return '${unit == 'USD' ? 'US\$ ' : '€ '}${value.toStringAsFixed(2)}';
-  }
-
-  static String _tpLabel(String key) {
-    switch (key) {
-      case 'normal':
-        return 'Normal';
-      case 'holofoil':
-        return 'Holo';
-      case 'reverse-holofoil':
-        return 'Reverse Holo';
-      case 'firstEditionHolofoil':
-        return '1ª Edição Holo';
-      default:
-        return key;
-    }
-  }
+  static const _colorMap = <String, Color>{
+    'Fogo': Color(0xFFF44336),
+    'Fire': Color(0xFFF44336),
+    'Água': Color(0xFF2196F3),
+    'Water': Color(0xFF2196F3),
+    'Planta': Color(0xFF4CAF50),
+    'Grass': Color(0xFF4CAF50),
+    'Elétrico': Color(0xFFFFEB3B),
+    'Lightning': Color(0xFFFFEB3B),
+    'Psíquico': Color(0xFF9C27B0),
+    'Psychic': Color(0xFF9C27B0),
+    'Lutador': Color(0xFFAD6227),
+    'Fighting': Color(0xFFAD6227),
+    'Noturno': Color(0xFF37474F),
+    'Darkness': Color(0xFF37474F),
+    'Metal': Color(0xFF78909C),
+    'Fada': Color(0xFFE91E9C),
+    'Fairy': Color(0xFFE91E9C),
+    'Dragão': Color(0xFFFF9800),
+    'Dragon': Color(0xFFFF9800),
+  };
 
   @override
   Widget build(BuildContext context) {
-    final p = pricing;
-    if (p == null || p.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text('Sem valores de mercado disponíveis.'),
-        ),
-      );
-    }
-    final t = Theme.of(context).textTheme;
-    final cm = p.cardmarket;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (cm != null) ...[
-              Text('Cardmarket',
-                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(_v('EUR', cm.trend ?? cm.avg),
-                    style: t.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                if (_orig('EUR', cm.trend ?? cm.avg).isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 3),
-                    child: Text(_orig('EUR', cm.trend ?? cm.avg),
-                        style: t.bodySmall?.copyWith(color: AppColors.text4)),
-                  ),
-              ]),
-              Text('tendência', style: t.bodySmall?.copyWith(color: AppColors.text4)),
-              const SizedBox(height: 8),
-              Wrap(spacing: 16, runSpacing: 4, children: [
-                _kv('média', _v('EUR', cm.avg)),
-                _kv('mínimo', _v('EUR', cm.low)),
-                _kv('7 dias', _v('EUR', cm.avg7)),
-                _kv('30 dias', _v('EUR', cm.avg30)),
-              ]),
-              if (cm.hasHolo) ...[
-                const SizedBox(height: 10),
-                Text('Reverse / Holo',
-                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                Wrap(spacing: 16, runSpacing: 4, children: [
-                  _kv('tendência', _v('EUR', cm.trendHolo)),
-                  _kv('média', _v('EUR', cm.avgHolo)),
-                  _kv('mínimo', _v('EUR', cm.lowHolo)),
-                ]),
-              ],
-            ],
-            if (cm != null && p.tcgplayer.isNotEmpty) const Divider(height: 24),
-            if (p.tcgplayer.isNotEmpty) ...[
-              Text('TCGplayer',
-                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              for (final e in p.tcgplayer.entries)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(_tpLabel(e.key), style: t.bodyMedium),
-                      ),
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(_v('USD', e.value.market ?? e.value.mid),
-                                style: t.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                            Text(
-                              'mín ${_v('USD', e.value.low)} · méd ${_v('USD', e.value.mid)}',
-                              style: t.bodySmall?.copyWith(color: AppColors.text4),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              _footer(),
-              style: t.bodySmall?.copyWith(color: AppColors.text6),
-            ),
-          ],
-        ),
-      ),
+    final color = _colorMap[type] ?? AppColors.text4;
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
-
-  String _footer() {
-    final buf = StringBuffer('Fonte: TCGdex');
-    if (updatedAt != null) buf.write(' · preços de ${_date(updatedAt!)}');
-    if (fx != null) {
-      buf.write('\nCâmbio: € 1 = ${formatBrl(fx!.eurToBrl)} · '
-          'US\$ 1 = ${formatBrl(fx!.usdToBrl)}');
-      if (fx!.date != null) buf.write(' (${_date(fx!.date!)})');
-    }
-    return buf.toString();
-  }
-
-  static Widget _kv(String k, String v) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(v, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text(k, style: const TextStyle(fontSize: 11, color: AppColors.text4)),
-        ],
-      );
-
-  static String _date(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }
 
-class _AttackTile extends StatelessWidget {
-  const _AttackTile(this.attack);
-  final CardAttack attack;
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid({required this.card, this.entry});
+  final Card card;
+  final CollectionCardEntry? entry;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.border1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('DETALHES', style: AppType.sectionLabel),
+          const SizedBox(height: 14),
           Row(
             children: [
-              if (attack.cost.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Text('(${attack.cost.join(' ')})',
-                      style: t.bodySmall?.copyWith(color: AppColors.text4)),
-                ),
               Expanded(
-                child: Text(attack.name,
-                    style: t.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                child: _StatCell(
+                  label: 'Você tem',
+                  value: entry != null ? '${entry!.quantity}x' : '—',
+                ),
               ),
-              if (attack.damage != null && attack.damage!.isNotEmpty)
-                Text(attack.damage!,
-                    style: t.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCell(
+                  label: 'Estado',
+                  value: entry?.condition ?? '—',
+                ),
+              ),
             ],
           ),
-          if (attack.effect != null && attack.effect!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(attack.effect!, style: t.bodySmall),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCell(
+                  label: 'Acabamento',
+                  value: _finishLabel(entry?.finish),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCell(
+                  label: 'Valor estimado',
+                  value: card.priceBrl != null
+                      ? 'R\$ ${card.priceBrl!.toStringAsFixed(2)}'
+                      : '—',
+                  valueColor: card.priceBrl != null ? AppColors.gold : null,
+                ),
+              ),
+            ],
+          ),
+          if (card.weaknesses.isNotEmpty || card.retreat != null) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+            if (card.weaknesses.isNotEmpty)
+              Text(
+                'Fraqueza: ${card.weaknesses.map((w) => '${w.type} ${w.value ?? ''}'.trim()).join(', ')}',
+                style: AppType.bodySm.copyWith(color: AppColors.text3),
+              ),
+            if (card.retreat != null)
+              Text(
+                'Custo de recuo: ${card.retreat}',
+                style: AppType.bodySm.copyWith(color: AppColors.text3),
+              ),
+          ],
+          if (card.illustrator != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Ilustração: ${card.illustrator}',
+              style: AppType.caption,
             ),
+          ],
         ],
       ),
     );
   }
+
+  static String _finishLabel(String? finish) {
+    switch (finish) {
+      case 'holo':
+        return 'Holo';
+      case 'reverse':
+        return 'Reverse';
+      case 'normal':
+        return 'Normal';
+      default:
+        return finish ?? '—';
+    }
+  }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-      );
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip(this.label);
+class _StatCell extends StatelessWidget {
+  const _StatCell({required this.label, required this.value, this.valueColor});
   final String label;
+  final String value;
+  final Color? valueColor;
+
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 12)),
-      );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSunken,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppType.caption),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppType.mono.copyWith(
+              color: valueColor ?? AppColors.text1,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.onRetry, required this.message});
   final VoidCallback onRetry;
   final String message;
+
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.cloud_off, size: 48, color: AppColors.text4),
             const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text('Não consegui carregar os dados da carta.\n$message',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.text3)),
+            Text(
+              'Não consegui carregar os dados da carta.\n$message',
+              textAlign: TextAlign.center,
+              style: AppType.body.copyWith(color: AppColors.text3),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
+            const SizedBox(height: 16),
+            TextButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               label: const Text('Tentar de novo'),
             ),
           ],
         ),
-      );
+      ),
+    );
+  }
 }

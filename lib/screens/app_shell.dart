@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
+import '../state/app_shell_controller.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../widgets/floating_tab_bar.dart';
-import '../widgets/primary_button.dart';
-import 'set_selection_screen.dart';
+import 'collection_screen.dart';
+import 'journeys_screen.dart';
+import 'scan/escanear_tab.dart';
+import 'profile_screen.dart';
+import 'search_screen.dart';
 
 /// Shell do app: 5 abas + tab bar flutuante (README § Navegação).
 /// As telas reais do design entram nas próximas rodadas — por ora, placeholders
@@ -18,8 +23,6 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
-
   static const _tabs = [
     TabItem(Icons.grid_view_rounded, 'Coleção'),
     TabItem(Icons.explore_outlined, 'Jornadas'),
@@ -28,97 +31,64 @@ class _AppShellState extends State<AppShell> {
     TabItem(Icons.person_outline_rounded, 'Perfil'),
   ];
 
+  static const _pages = [
+    CollectionScreen(),
+    JourneysScreen(),
+    EscanearTab(),
+    SearchScreen(),
+    ProfileScreen(),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      const _Placeholder('Minhas cartas'),
-      const _Placeholder('Jornadas'),
-      const _ScanTab(),
-      const _Placeholder('Busca'),
-      const _ProfileTab(),
-    ];
-
+    final controller = context.watch<AppShellController>();
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(index: _index, children: pages),
+      body: Stack(
+        children: [
+          IndexedStack(index: controller.tabIndex, children: _pages),
+          if (controller.toastMessage != null) _Toast(message: controller.toastMessage!),
+        ],
+      ),
       bottomNavigationBar: FloatingTabBar(
         items: _tabs,
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        currentIndex: controller.tabIndex,
+        onTap: controller.switchToTab,
       ),
     );
   }
 }
 
-class _Placeholder extends StatelessWidget {
-  const _Placeholder(this.title);
-  final String title;
+/// Toast "{nome} → {coleção}" (README §4 Confirmar), 2,2s, controlado por
+/// [AppShellController] pra funcionar cruzando a troca de aba.
+class _Toast extends StatelessWidget {
+  const _Toast({required this.message});
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 66, 22, 120),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppType.screenTitle),
-          const SizedBox(height: 12),
-          Text('Tela em construção.', style: AppType.body),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScanTab extends StatelessWidget {
-  const _ScanTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 66, 22, 120),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Escanear', style: AppType.scanTitle),
-          const SizedBox(height: 12),
-          Text('Enquadre a carta inteira.', style: AppType.body),
-          const Spacer(),
-          PrimaryButton(
-            label: 'Abrir scanner',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SetSelectionScreen()),
-            ),
+    return Positioned(
+      left: 22,
+      right: 22,
+      bottom: 100,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.purple800,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: AppShadows.toast,
           ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab();
-
-  @override
-  Widget build(BuildContext context) {
-    final user = AuthService.instance.currentUser;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 66, 22, 120),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Perfil', style: AppType.screenTitle),
-          const SizedBox(height: 12),
-          Text(user?.email ?? '—',
-              style: AppType.body.copyWith(color: AppColors.text3)),
-          const Spacer(),
-          SecondaryButton(
-            label: 'Sair',
-            onPressed: () => AuthService.instance.signOut(),
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppType.body.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
           ),
-        ],
+        ),
       ),
     );
   }
 }
+
+

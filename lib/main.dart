@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'screens/auth/auth_gate.dart';
+import 'state/app_shell_controller.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_typography.dart';
@@ -25,11 +27,14 @@ class PokeCardexApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PokéCardex',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      home: Config.isConfigured ? const AuthGate() : const _MissingConfig(),
+    return ChangeNotifierProvider(
+      create: (_) => AppShellController(),
+      child: MaterialApp(
+        title: 'PokéCardex',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Config.isConfigured ? const AuthGate() : const _MissingConfig(),
+      ),
     );
   }
 }

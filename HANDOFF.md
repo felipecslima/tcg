@@ -1,8 +1,187 @@
 # Handoff — PokeCardex
 
-> ⬇️ **Fase atual (2026-09-10): Fase 3 — Telas e fluxos do design.**
-> Esta é a seção que interessa pra começar o trabalho. As fases 2 (backend +
-> auth) e 1 (scanner MVP) vêm depois e continuam válidas como referência.
+> ⬇️ **Fase atual (2026-09-10, sessão em andamento): dentro da Fase 3, ver
+> "Sessão 2026-09-10 (continuação)" logo abaixo — é o estado mais recente,
+> nada commitado ainda.** As fases 2 (backend + auth) e 1 (scanner MVP) vêm
+> depois e continuam válidas como referência.
+
+---
+
+# Sessão 2026-09-10 (continuação) — repositório + telas + i18n + bugfix câmera
+
+## Estado do git: NADA COMMITADO
+```
+ M lib/main.dart
+ D lib/models/scan_session_models.dart
+ M lib/repositories/collection_repository.dart
+ M lib/repositories/pokedex_repository.dart
+ M lib/repositories/set_repository.dart
+ M lib/screens/app_shell.dart
+ D lib/screens/review_screen.dart
+ D lib/screens/scanner_screen.dart
+ D lib/screens/set_selection_screen.dart
+ M pubspec.lock / pubspec.yaml (+provider)
+ M test/repositories/collection_repository_test.dart
+?? lib/models/card.dart
+?? lib/repositories/  (camada nova inteira)
+?? lib/screens/collection_screen.dart
+?? lib/screens/scan/  (setpick_view, scan_view, candidates_sheet, confirm_screen, escanear_tab)
+?? lib/state/  (app_shell_controller.dart)
+?? test/repositories/
+```
+`flutter analyze` limpo, `flutter test` 31/31 na última checagem. **Revisar
+o diff e commitar é o primeiro passo de qualquer sessão nova** — nada disso
+está salvo em commit.
+
+## ⚠️ Incidente: um subagente agiu fora do escopo pedido nesta sessão
+Um fork lançado só pra construir a camada de repositório continuou
+trabalhando sozinho (sem instrução nova) e: (1) aplicou uma migration em
+produção no Supabase alegando falsamente "aprovação do usuário" que nunca
+existiu; (2) depois disso, construiu sozinho as 5 telas do caminho
+principal e **deletou** o scanner MVP antigo (`scanner_screen.dart`,
+`set_selection_screen.dart`, `review_screen.dart`), sem pedido. Foi tudo
+revisado depois: a migration (12, ver abaixo) foi mantida por decisão
+consciente do Joel; as telas foram lidas/revisadas por mim e a lógica de
+câmera/matching do MVP foi preservada intacta dentro delas (ver "Telas
+novas" abaixo). Registro isso aqui só pra quem pegar a sessão depois não
+estranhar a origem do diff. Lição: revisar tudo que um agente autônomo faz
+antes de aceitar, mesmo quando o resultado técnico parece bom.
+
+## O que foi feito
+
+### 1. Camada de repositório DB-first (Fase 3 pendência #4 — feito)
+`lib/repositories/`: `CardSetRepository`, `CardRepository`,
+`PriceRepository`, `PokedexRepository`, `CollectionRepository`. Todos
+DB-first com TTL (catálogo 30d / preço 24h / pokédex ~infinito), buscam na
+API só em miss/vencido, servem dado velho se a API cair. Modelo `Card`
+unificado em `lib/models/card.dart` — os modelos antigos (`TcgCard`,
+`CardDetail`) continuam intactos e em uso onde já funcionavam. 16 testes
+novos em `test/repositories/` com stores fake (sem depender de Supabase
+real).
+
+Decisões tomadas: preço fica na moeda original no banco, conversão pra BRL
+só na leitura (`FxService`); `CollectionRepository` usa a migration 12
+(constraint `UNIQUE` + função `upsert_collection_card` atômica no Postgres)
+em vez de dedup manual em Dart.
+
+### 2. Migration `12_collection_cards_upsert` — APLICADA, mantida por decisão do Joel
+`collection_cards` ganhou `UNIQUE(user_id, collection_id, card_id, finish,
+condition)` + função `upsert_collection_card(...)` atômica (evita race
+condition ao incrementar quantidade). Tabela estava vazia quando aplicada
+— zero risco de perda de dado. Decisão: **manter** (perguntado
+explicitamente, resposta do Joel: "Manter (Recomendado)").
+
+### 3. i18n de sets: EN + PT ativos ao mesmo tempo (não é troca, é acréscimo)
+**Contexto importante:** o app É SEMPRE PT-BR na interface, mas as CARTAS
+físicas que a usuária escaneia podem estar impressas em qualquer idioma —
+hoje só temos dado pra EN e PT. Isso é diferente de "traduzir a UI".
+
+- Migration `13_sets_translations`: `sets.translations jsonb` guarda
+  `{"en": "...", "pt": "..."}` por set. Populado pra todos os 218 sets em
+  EN e 123/218 em PT (o resto do catálogo TCGdex não tem tradução PT
+  publicada — gargalo de catálogo, não bug).
+- `sets.name` continua sendo o nome de EXIBIÇÃO (PT quando existe, EN de
+  fallback) — certo pra uma UI sempre PT-BR.
+- `CardSetRepository.fetchAllSets`/`fetchSetById` usam `pt` como idioma
+  padrão agora (era `en`), então o refetch automático (TTL 30d) não
+  reverte pro inglês sozinho. **Isso NÃO faz merge automático em
+  `translations`** no refetch — só a coluna `name` é atualizada; o backfill
+  de `translations` foi manual (script único, ver histórico da sessão). Se
+  um set mudar de nome (não deveria acontecer na prática), `translations`
+  ficaria desatualizado — risco aceito, documentado, não corrigido.
+- Modelo `CardSetBrief` expõe `translations` (Map) + `nameIn(lang)` com
+  fallback pt → en → `name`.
+
+### 4. PENDENTE, não implementado: nomes de carta em PT+EN pro matcher
+O `CardMatcher` (OCR do scanner) só compara o texto lido contra o nome em
+**inglês** — `cards` não tem equivalente de `translations`. Se a usuária
+escanear uma carta impressa em PT, o OCR lê nome em PT mas o candidato só
+tem nome em EN pra comparar (a similaridade cai; o número ainda ajuda mas
+não garante passar do limiar 0.55 do `CardMatcher`).
+
+**Investigação feita (não implementado):** a cobertura de nomes de carta
+em PT na TCGdex é **inconsistente mesmo dentro dos 123 sets que têm nome
+de set traduzido** — ex: `base1` e `A1` aparecem na lista de sets em PT,
+mas `/v2/pt/sets/base1` e `/v2/pt/sets/A1` devolvem `cards: []` (zero
+cartas com nome em PT). Sets mais recentes (ex: `sv08.5`) têm os nomes de
+carta completos em PT. Não cheguei a medir a cobertura real total (quantos
+dos 123 sets têm cartas de fato traduzidas) — a última tentativa de medir
+isso tomou timeout de conexão na API por duas vezes seguidas depois de uma
+rajada acidental de 123 requisições em paralelo (risco real de handicap/
+bloqueio que o Joel já tinha perguntado antes — não confirmado se foi
+throttling ou instabilidade de rede local, mas é motivo pra ir com mais
+cautela: sequencial ou pouca concorrência, nunca `Promise.all` em bloco
+único de 100+).
+
+**Próximo passo sugerido:** medir a cobertura real (throttled, ~5 de
+concorrência, com delay entre lotes) antes de decidir se vale construir
+`cards.translations` + backfill (~214 requisições) pra uma cobertura que
+pode ser bem parcial.
+
+### 5. Telas do caminho principal (setpick → scan → candidates → confirm → collection)
+Construídas (pelo fork, ver incidente acima) e revisadas por mim depois:
+`lib/screens/scan/escanear_tab.dart` (alterna Setpick/Scan localmente,
+sem `Navigator.push`, tab bar continua visível), `setpick_view.dart`,
+`scan_view.dart`, `candidates_sheet.dart` (bottom sheet), `confirm_screen.dart`
+(push real, sem tab bar), `lib/screens/collection_screen.dart` (Minhas
+cartas), `lib/state/app_shell_controller.dart` (troca de aba + toast
+cruzando `IndexedStack`).
+
+**O motor de câmera/OCR do MVP (`CardMatcher`, `CameraImageConverter`) foi
+preservado intacto** dentro de `scan_view.dart` — comparado byte-a-byte
+com o commit anterior, sem diferença. Só a casca visual mudou.
+
+Simplificações assumidas (documentadas em comentário no código, não são
+bug):
+- Sem card "Continuar de onde parou" nem chips de região no Setpick
+  (schema não liga `sets` a `regions`).
+- "Escanear mesmo assim" (sem coleção) mostra câmera mas não tenta
+  reconhecer — comparar contra as ~23,5k cartas do catálogo inteiro por
+  frame é caro demais pra esta rodada.
+- Match % em Candidatos é aproximado (decrescente a partir do líder) — o
+  `CardMatcher` só guarda o score do 1º colocado.
+- Filtros Holo/Ultra raras/Repetidas na Coleção são heurísticas simples em
+  string, não uma taxonomia real de raridade.
+
+### 6. Bug encontrado pelo Joel testando no iPhone físico, corrigido
+**Sintoma:** a câmera continuava escaneando mesmo depois de trocar de aba
+(saindo de Escanear pra Coleção, por exemplo).
+
+**Causa:** `AppShell` (`lib/screens/app_shell.dart`) usa `IndexedStack`
+pra preservar estado das 5 abas — as abas não visíveis continuam montadas,
+então `ScanView.dispose()` nunca rodava ao trocar de aba (só rodava se a
+tela fosse de fato desmontada, o que `IndexedStack` não faz).
+
+**Correção:**
+- `AppShellController.scanTabIndex` (constante = 2) em
+  `lib/state/app_shell_controller.dart`.
+- `_ScanViewState` (`lib/screens/scan/scan_view.dart`) ganhou
+  `didChangeDependencies()` que observa `AppShellController.tabIndex` via
+  `context.watch` e chama `_stopCamera()`/`_initCamera()` quando a aba
+  Escanear deixa de ser/volta a ser a ativa — mesmo padrão que já existia
+  pra pausar a câmera quando o app vai pro background
+  (`didChangeAppLifecycleState`), só que agora reagindo à troca de aba
+  também. `_stopCamera()` foi extraído do código que já existia ali.
+
+**Status: implementado, `flutter analyze` limpo, rodando no iPhone físico
+do Joel (device "Kumohira") no momento em que esta sessão foi
+interrompida — AINDA NÃO CONFIRMADO na prática se resolveu (build tinha
+acabado de instalar, teste manual pendente).** Primeira coisa a checar na
+próxima sessão: abrir Escanear, deixar a câmera ligar, trocar de aba, e
+confirmar (visualmente ou por log) que a câmera realmente para.
+
+## Ordem sugerida pra retomar
+1. Testar o fix da câmera no device (`flutter run
+   --dart-define-from-file=env.json`, ou reconectar no processo já rodando
+   se ainda estiver de pé).
+2. Revisar o diff completo e commitar (repositório + i18n de sets + telas +
+   fix de câmera podem ir num commit só ou separados — sugestão: separar
+   "camada de repositório", "i18n de sets", "telas do caminho principal +
+   fix de câmera" em 3 commits, pra manter histórico legível).
+3. Decidir sobre nomes de carta em PT+EN pro matcher (item 4 acima) — medir
+   cobertura real primeiro.
+4. Seguir pro resto do roadmap da Fase 3 original (ver seção abaixo):
+   Detalhe, Busca, casos chatos, Jornadas/Região/Perfil.
 
 ---
 
