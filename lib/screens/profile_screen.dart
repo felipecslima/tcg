@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../constants/eevee_assets.dart';
 import '../repositories/collection_repository.dart';
 import '../repositories/pokedex_repository.dart';
 import '../repositories/price_repository.dart';
 import '../services/auth_service.dart';
 import '../services/collection_stats.dart';
+import '../state/avatar_controller.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
@@ -100,6 +103,7 @@ class _HeroZone extends StatelessWidget {
     final user = AuthService.instance.currentUser;
     final displayName = user?.userMetadata?['display_name'] as String? ?? user?.email ?? '—';
     final level = stats?.level ?? 1;
+    final avatar = context.watch<AvatarController>().avatar;
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -109,12 +113,22 @@ class _HeroZone extends StatelessWidget {
       ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 36,
-            backgroundColor: AppColors.tintStrong,
-            child: Text(
-              displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-              style: AppType.hero.copyWith(color: AppColors.primary, fontSize: 28),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.lilac200,
+              border: Border.all(color: AppColors.purple400, width: 2),
+            ),
+            child: ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Image.asset(
+                  EeveeAssets.path(avatar),
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -137,8 +151,65 @@ class _HeroZone extends StatelessWidget {
             '${stats?.xp ?? 0} XP',
             style: AppType.caption,
           ),
+          const SizedBox(height: 18),
+          const _PartnerSelector(),
         ],
       ),
+    );
+  }
+}
+
+class _PartnerSelector extends StatelessWidget {
+  const _PartnerSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final current = context.watch<AvatarController>().avatar;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('SEU PARCEIRO', style: AppType.sectionLabel),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 56,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: EeveeAssets.all.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final name = EeveeAssets.all[i];
+              final selected = name == current;
+              return GestureDetector(
+                onTap: () => context.read<AvatarController>().setAvatar(name),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected ? AppColors.lilac200 : Colors.white,
+                    border: Border.all(
+                      color: selected ? AppColors.purple600 : AppColors.tint,
+                      width: selected ? 3 : 2,
+                    ),
+                  ),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: selected ? 1.0 : 0.7,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Image.asset(
+                        EeveeAssets.path(name),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

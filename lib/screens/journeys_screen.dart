@@ -2,12 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Card;
 
+import '../constants/eevee_assets.dart';
 import '../repositories/collection_repository.dart';
 import '../repositories/pokedex_repository.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/loaders/loaders.dart';
 import 'region_cards_screen.dart';
 
 class JourneysScreen extends StatefulWidget {
@@ -87,7 +89,7 @@ class _JourneysScreenState extends State<JourneysScreen> {
           if (_loading)
             const Center(child: Padding(
               padding: EdgeInsets.only(top: 40),
-              child: CircularProgressIndicator(),
+              child: MedalhaoLoader(),
             ))
           else if (_error != null)
             Center(child: Text('Erro: $_error', style: AppType.body.copyWith(color: AppColors.text3)))
@@ -220,40 +222,91 @@ class _TrailNode extends StatelessWidget {
   Widget build(BuildContext context) {
     final started = rp.ownedPokemon > 0;
     final pct = (rp.progress * 100).round();
+    final guardian = EeveeAssets.guardians[rp.region.name];
+
     return GestureDetector(
       onTap: started ? onTap : null,
-      child: Opacity(
-        opacity: started ? 1.0 : 0.5,
-        child: SizedBox(
-          height: 80,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 60,
-                child: Center(
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: started ? AppColors.gradNode : null,
-                      color: started ? null : AppColors.surfaceSunken,
-                      border: started ? null : Border.all(color: AppColors.border2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '$pct%',
-                        style: AppType.mono.copyWith(
-                          fontSize: 11,
-                          color: started ? Colors.white : AppColors.text4,
+      child: SizedBox(
+        height: 88,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 68,
+              child: Center(
+                child: SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: started ? AppColors.gradNode : null,
+                          color: started ? null : AppColors.surfaceSunken,
+                          border: started ? null : Border.all(color: AppColors.border2),
                         ),
+                        child: guardian != null
+                            ? Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: ColorFiltered(
+                                  colorFilter: started
+                                      ? const ColorFilter.mode(Colors.transparent, BlendMode.multiply)
+                                      : const ColorFilter.matrix(<double>[
+                                          0.2126, 0.7152, 0.0722, 0, 0,
+                                          0.2126, 0.7152, 0.0722, 0, 0,
+                                          0.2126, 0.7152, 0.0722, 0, 0,
+                                          0,      0,      0,      1, 0,
+                                        ]),
+                                  child: Opacity(
+                                    opacity: started ? 1.0 : 0.45,
+                                    child: Image.asset(
+                                      EeveeAssets.path(guardian),
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: Text(
+                                  '$pct%',
+                                  style: AppType.mono.copyWith(
+                                    fontSize: 11,
+                                    color: started ? Colors.white : AppColors.text4,
+                                  ),
+                                ),
+                              ),
                       ),
-                    ),
+                      if (guardian != null)
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: const [
+                                BoxShadow(color: Color(0x1A000000), blurRadius: 4, offset: Offset(0, 1)),
+                              ],
+                            ),
+                            child: Text(
+                              '$pct%',
+                              style: AppType.mono.copyWith(fontSize: 9, color: AppColors.text2),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Opacity(
+                opacity: started ? 1.0 : 0.5,
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -270,15 +323,17 @@ class _TrailNode extends StatelessWidget {
                       ProgressBar(value: rp.progress, height: 5),
                       const SizedBox(height: 4),
                       Text(
-                        '${rp.ownedPokemon}/${rp.totalPokemon} Pokémon',
+                        started
+                            ? '${rp.ownedPokemon} de ${rp.totalPokemon} · faltam ${rp.totalPokemon - rp.ownedPokemon}'
+                            : 'ainda não começou',
                         style: AppType.caption,
                       ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

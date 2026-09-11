@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_widgets.dart';
+import '../../widgets/loaders/loaders.dart';
 import '../../widgets/primary_button.dart';
 
 /// Tela 1 do fluxo (README §1 "Escolher coleção") — sub-view da aba
@@ -137,7 +138,7 @@ class _SetpickViewState extends State<SetpickView> {
       );
     }
     if (_sets == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: MedalhaoLoader());
     }
     if (filtered.isEmpty) {
       return Center(child: Text('Nenhuma coleção encontrada.', style: AppType.body));

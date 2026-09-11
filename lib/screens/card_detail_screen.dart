@@ -8,6 +8,7 @@ import '../services/fx_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../widgets/loaders/loaders.dart';
 import '../widgets/app_widgets.dart';
 
 /// Tela de detalhe de uma carta — destino de Coleção, Busca, Candidatos.
@@ -141,7 +142,7 @@ class _DetailBody extends StatelessWidget {
               _MetadataLine(card: card),
               if (loading) ...[
                 const SizedBox(height: 24),
-                const Center(child: CircularProgressIndicator()),
+                const Center(child: MedalhaoLoader()),
               ],
               if (detailLoaded) ...[
                 const SizedBox(height: 14),

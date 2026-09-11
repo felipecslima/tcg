@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_widgets.dart';
+import '../widgets/loaders/loaders.dart';
 import '../widgets/pokemon_variations_sheet.dart';
 import 'card_detail_screen.dart';
 
@@ -137,7 +138,7 @@ class _RegionCardsScreenState extends State<RegionCardsScreen> {
   }
 
   Widget _buildBody() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: MedalhaoLoader());
     if (_error != null) {
       return Center(
         child: Text('Erro: $_error', style: AppType.body.copyWith(color: AppColors.text3)),

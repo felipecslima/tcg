@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_widgets.dart';
+import 'loaders/loaders.dart';
 
 /// Bottom sheet que lista todas as variações (cartas de diferentes sets) de um
 /// Pokémon. Destaque visual nas que a usuária já possui.
@@ -111,7 +112,7 @@ class _VariationsSheetState extends State<_VariationsSheet> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(40),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: MiudoLoader()),
             )
           else if (_cards == null || _cards!.isEmpty)
             Padding(

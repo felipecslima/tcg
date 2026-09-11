@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_widgets.dart';
+import '../../widgets/loaders/loaders.dart';
 import '../../widgets/primary_button.dart';
 
 const _finishes = ['normal', 'reverse', 'holo'];
@@ -108,7 +109,7 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
         title: Text('Revisar ${session.distinctCount} ${session.distinctCount == 1 ? 'carta' : 'cartas'}'),
       ),
       body: collections == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: PulinhoLoader())
           : Column(
               children: [
                 Expanded(
@@ -298,12 +299,10 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
           if (_saving)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: LinearProgressIndicator(
-                value: context.read<BatchSession>().distinctCount > 0
+              child: BarraLoader(
+                progress: context.read<BatchSession>().distinctCount > 0
                     ? _savedCount / context.read<BatchSession>().distinctCount
                     : 0,
-                color: AppColors.primary,
-                backgroundColor: AppColors.tint,
               ),
             ),
           PrimaryButton(

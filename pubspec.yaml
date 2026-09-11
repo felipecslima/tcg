@@ -31,6 +31,8 @@ dependencies:
   # TODO: empacotar os .ttf em assets/fonts/ antes do release (design pede offline).
   google_fonts: ^6.2.1
 
+  shared_preferences: ^2.3.0
+
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
@@ -40,3 +42,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/eevee/
+    - assets/splash/

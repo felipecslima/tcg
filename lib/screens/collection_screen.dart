@@ -8,6 +8,7 @@ import '../services/fx_service.dart';
 import '../state/app_shell_controller.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../widgets/loaders/loaders.dart';
 import '../theme/app_typography.dart';
 import '../widgets/app_widgets.dart';
 import '../widgets/primary_button.dart';
@@ -110,7 +111,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
       return _ErrorState(message: _error!, onRetry: _load);
     }
     if (_entries == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: MedalhaoLoader());
     }
     final entries = _entries!;
     final totalCards = entries.fold<int>(0, (sum, e) => sum + e.quantity);

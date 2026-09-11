@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
-import 'screens/auth/auth_gate.dart';
+import 'constants/eevee_assets.dart';
+import 'screens/splash_screen.dart';
 import 'state/app_shell_controller.dart';
+import 'state/avatar_controller.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_typography.dart';
@@ -19,21 +21,33 @@ Future<void> main() async {
     );
   }
 
-  runApp(const PokeCardexApp());
+  runApp(const TieDexApp());
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final context = WidgetsBinding.instance.rootElement;
+    if (context != null) {
+      for (final name in EeveeAssets.all) {
+        precacheImage(AssetImage(EeveeAssets.path(name)), context);
+      }
+    }
+  });
 }
 
-class PokeCardexApp extends StatelessWidget {
-  const PokeCardexApp({super.key});
+class TieDexApp extends StatelessWidget {
+  const TieDexApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppShellController(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppShellController()),
+        ChangeNotifierProvider(create: (_) => AvatarController()),
+      ],
       child: MaterialApp(
-        title: 'PokéCardex',
+        title: 'TieDex',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: Config.isConfigured ? const AuthGate() : const _MissingConfig(),
+        home: Config.isConfigured ? const SplashScreen() : const _MissingConfig(),
       ),
     );
   }

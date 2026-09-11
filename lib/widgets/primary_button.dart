@@ -3,19 +3,21 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import 'loaders/miudo_loader.dart';
 
-/// Botão primário do design: largura total, lilás, sombra, texto Sora 16/700.
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.loading = false,
+    this.loadingLabel,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -36,23 +38,27 @@ class PrimaryButton extends StatelessWidget {
             child: SizedBox(
               height: 54,
               width: double.infinity,
-              child: Center(
-                child: loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.onPrimary,
-                        ),
-                      )
-                    : Text(label, style: AppType.buttonPrimary),
-              ),
+              child: Center(child: _buildContent()),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildContent() {
+    if (!loading) return Text(label, style: AppType.buttonPrimary);
+    if (loadingLabel != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MiudoLoader(size: 20),
+          const SizedBox(width: 10),
+          Text(loadingLabel!, style: AppType.buttonPrimary),
+        ],
+      );
+    }
+    return const MiudoLoader(size: 20);
   }
 }
 

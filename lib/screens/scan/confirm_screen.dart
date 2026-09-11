@@ -8,6 +8,7 @@ import '../../repositories/price_repository.dart';
 import '../../services/fx_service.dart';
 import '../../state/app_shell_controller.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/loaders/loaders.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../widgets/app_widgets.dart';
@@ -81,6 +82,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
       _error = null;
     });
     try {
+      final sw = Stopwatch()..start();
       await _collectionRepo.addCardToCollection(
         collectionId: destination,
         cardId: widget.card.id,
@@ -88,6 +90,10 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         quantity: _qty,
         language: widget.language,
       );
+      final remaining = 1100 - sw.elapsedMilliseconds;
+      if (remaining > 0) {
+        await Future.delayed(Duration(milliseconds: remaining));
+      }
       if (!mounted) return;
       final destName =
           _collections!.firstWhere((c) => c.id == destination).name;
@@ -113,7 +119,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         title: const Text('Confirmar'),
       ),
       body: collections == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: PulinhoLoader())
           : ListView(
               padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
               children: [
@@ -162,6 +168,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                 PrimaryButton(
                   label: 'Salvar na coleção',
                   loading: _saving,
+                  loadingLabel: 'Salvando…',
                   onPressed: _destinationId == null ? null : _save,
                 ),
               ],

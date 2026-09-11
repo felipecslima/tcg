@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:provider/provider.dart';
 
 import '../../models/card.dart' as domain;
+import '../../widgets/loaders/loaders.dart';
 import '../../models/tcg_card.dart';
 import '../../repositories/card_repository.dart';
 import '../../repositories/set_repository.dart';
@@ -628,6 +630,19 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
               painter: _ViewfinderCornersPainter(),
             ),
           ),
+          if (_loadingCandidates)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                child: Container(
+                  width: 250,
+                  height: 350,
+                  color: const Color(0x8CEFEAF6),
+                  child: const Center(child: MedalhaoLoader(size: 80)),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -646,7 +661,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
-      return const ColoredBox(color: Colors.black, child: Center(child: CircularProgressIndicator()));
+      return const ColoredBox(color: Colors.black, child: Center(child: MiudoLoader(size: 24)));
     }
     return FittedBox(
       fit: BoxFit.cover,

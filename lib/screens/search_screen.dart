@@ -8,6 +8,7 @@ import '../repositories/collection_repository.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../widgets/loaders/loaders.dart';
 import '../widgets/app_widgets.dart';
 import 'card_detail_screen.dart';
 
@@ -117,7 +118,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: MedalhaoLoader());
     }
     if (_error != null) {
       return Center(
