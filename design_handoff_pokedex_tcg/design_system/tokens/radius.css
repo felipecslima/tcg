@@ -1,0 +1,9 @@
+:root {
+  --ds-radius-xs: 6px;    /* mini arte de carta */
+  --ds-radius-sm: 10px;   /* arte em grade */
+  --ds-radius-md: 13px;   /* chips */
+  --ds-radius-lg: 16px;   /* botões, linhas de lista */
+  --ds-radius-xl: 20px;   /* cards */
+  --ds-radius-2xl: 26px;  /* tab bar, sheet */
+  --ds-radius-pill: 99px;
+}

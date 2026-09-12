@@ -1,0 +1,9 @@
+:root {
+  --ds-shadow-raised: 0 8px 20px rgba(60, 40, 100, .14);
+  --ds-shadow-card: 0 14px 34px rgba(60, 40, 100, .16);
+  --ds-shadow-hero: 0 22px 50px rgba(60, 40, 100, .2);
+  --ds-shadow-sheet: 0 -20px 60px rgba(60, 40, 100, .2);
+  --ds-shadow-action: 0 10px 30px rgba(122, 75, 196, .28);
+  --ds-glow: 0 0 26px rgba(122, 75, 196, .4);
+  --ds-blur-chrome: blur(22px);
+}

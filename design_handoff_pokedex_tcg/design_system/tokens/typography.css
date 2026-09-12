@@ -1,0 +1,26 @@
+:root {
+  --ds-font-display: "Sora", system-ui, sans-serif;
+  --ds-font-body: "DM Sans", system-ui, sans-serif;
+  --ds-font-mono: "DM Mono", ui-monospace, monospace;
+
+  /* Display — Sora, sempre com tracking negativo nos tamanhos grandes */
+  --ds-type-hero: 700 36px/1.05 var(--ds-font-display);
+  --ds-type-title: 700 30px/1.1 var(--ds-font-display);
+  --ds-type-title-sm: 700 24px/1.1 var(--ds-font-display);
+  --ds-type-card-title: 700 25px/1.1 var(--ds-font-display);
+  --ds-type-item: 600 15px/1.2 var(--ds-font-display);
+  --ds-type-item-lg: 600 19px/1.15 var(--ds-font-display);
+  --ds-tracking-tight: -.02em;
+
+  /* Corpo — DM Sans */
+  --ds-type-body: 400 15px/1.5 var(--ds-font-body);
+  --ds-type-body-sm: 400 14px/1.5 var(--ds-font-body);
+  --ds-type-caption: 400 12px/1.4 var(--ds-font-body);
+  --ds-type-button: 600 14px/1 var(--ds-font-body);
+
+  /* Dados e rótulos — DM Mono */
+  --ds-type-label: 600 11px/1 var(--ds-font-mono);
+  --ds-type-num: 600 14px/1 var(--ds-font-mono);
+  --ds-type-num-lg: 700 20px/1 var(--ds-font-mono);
+  --ds-tracking-label: .14em;
+}

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart' hide Card;
+import 'package:provider/provider.dart';
 
 import '../models/card.dart';
 import '../models/card_detail.dart' show CardAttack, CardmarketPrice, MarketPricing;
 import '../repositories/card_repository.dart';
 import '../repositories/collection_repository.dart';
 import '../services/fx_service.dart';
+import '../state/app_shell_controller.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
@@ -514,13 +516,101 @@ class _CardInfoCard extends StatelessWidget {
   }
 }
 
-class _CollectionCard extends StatelessWidget {
+class _CollectionCard extends StatefulWidget {
   const _CollectionCard({required this.card, required this.entry});
   final Card card;
   final CollectionCardEntry entry;
 
   @override
+  State<_CollectionCard> createState() => _CollectionCardState();
+}
+
+class _CollectionCardState extends State<_CollectionCard> {
+  bool _removing = false;
+
+  Future<void> _confirmRemove() async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.xl)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.text4,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Icon(Icons.delete_outline, size: 40, color: AppColors.error),
+            const SizedBox(height: 14),
+            Text('Remover da coleção?', style: AppType.listTitleLg),
+            const SizedBox(height: 8),
+            Text(
+              '${widget.card.name} (${widget.entry.quantity}x) será removida permanentemente.',
+              textAlign: TextAlign.center,
+              style: AppType.body.copyWith(color: AppColors.text3),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                  ),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Remover'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancelar', style: AppType.button.copyWith(color: AppColors.text2)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removing = true);
+    try {
+      await CollectionRepository().removeCardFromCollection(widget.entry.id);
+      if (!mounted) return;
+      context.read<AppShellController>().goToCollectionWithToast(
+        '${widget.card.name} removida',
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _removing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao remover: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final card = widget.card;
+    final entry = widget.entry;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -568,6 +658,29 @@ class _CollectionCard extends StatelessWidget {
               const SizedBox(width: 12),
               const Expanded(child: SizedBox()),
             ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                ),
+              ),
+              onPressed: _removing ? null : _confirmRemove,
+              icon: _removing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.error),
+                    )
+                  : const Icon(Icons.delete_outline, size: 18),
+              label: Text(_removing ? 'Removendo…' : 'Remover da coleção'),
+            ),
           ),
         ],
       ),

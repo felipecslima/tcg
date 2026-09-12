@@ -1,0 +1,18 @@
+:root {
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 14px;
+  --ds-space-5: 18px;
+  --ds-space-6: 22px;
+  --ds-space-7: 26px;
+  --ds-space-8: 34px;
+
+  /* Métricas de tela (mobile) */
+  --ds-screen-gutter: 22px;
+  --ds-screen-top: 66px;      /* abaixo da status bar */
+  --ds-screen-bottom: 120px;  /* folga para a tab bar flutuante */
+  --ds-list-gap: 9px;
+  --ds-grid-gap: 11px;
+  --ds-card-ratio: .72;       /* proporção de carta física, ~63x88mm */
+}

@@ -89,6 +89,8 @@ abstract class CollectionStore {
     required int quantity,
     String language = 'pt',
   });
+
+  Future<void> deleteCard(String entryId);
 }
 
 class SupabaseCollectionStore implements CollectionStore {
@@ -182,6 +184,11 @@ class SupabaseCollectionStore implements CollectionStore {
     });
     return row as Map<String, dynamic>;
   }
+
+  @override
+  Future<void> deleteCard(String entryId) async {
+    await _client.from('collection_cards').delete().eq('id', entryId);
+  }
 }
 
 /// Coleção da usuária — não tem noção de "TTL"/API: é dado 100% nosso,
@@ -240,6 +247,10 @@ class CollectionRepository {
   Future<Set<int>> fetchOwnedNationalDexIds() async {
     final ids = await _store.fetchOwnedNationalDexIds();
     return ids.toSet();
+  }
+
+  Future<void> removeCardFromCollection(String entryId) async {
+    await _store.deleteCard(entryId);
   }
 
   Future<int> addCardsBatch({

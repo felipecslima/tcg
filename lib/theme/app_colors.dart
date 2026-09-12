@@ -76,6 +76,7 @@ abstract final class AppColors {
   static const red = Color(0xFFC04A4A); // desvalorização
   static const positive = green;
   static const negative = red;
+  static const error = red;
 
   // ── Bordas — sempre roxo translúcido, nunca cinza ──────────────────
   static const border1 = Color(0x1F7A4BC4); // .12 em repouso

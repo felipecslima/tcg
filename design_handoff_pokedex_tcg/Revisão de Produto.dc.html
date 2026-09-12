@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>doc-page:not(:defined){visibility:hidden}</style>
+<script src="./doc-page.js"></script>
+</helmet>
+<doc-page margin="0.85in">
+<div style="font-family:'DM Sans',system-ui,sans-serif;color:#241a35;font-size:15px;line-height:1.62">
+
+<div style="font:600 11px/1 'DM Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#7A4BC4">Memo · Produto</div>
+<h1 style="font:700 34px/1.15 Sora,sans-serif;letter-spacing:-.02em;margin:14px 0 0">Revisão de produto — Pokédex TCG</h1>
+<p style="font:400 16px/1.55 'DM Sans',sans-serif;color:#645878;margin:12px 0 0">Para quem vai construir isso. O que o produto é, o que ainda falta, e em que ordem fazer.</p>
+
+<div style="height:1px;background:rgba(122,75,196,.2);margin:30px 0"></div>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:0 0 10px">O que este produto é</h2>
+<p style="margin:0 0 14px">Um presente para uma menina de 11 anos, usado por ela, pelo pai e por umas quatro amigas. Não vai para a loja, não precisa escalar, não precisa de contas, telemetria, plano de monetização ou pesquisa com usuários. O sucesso não é retenção: é ela achar o app legal e usar quando quiser.</p>
+<p style="margin:0 0 14px">Isso simplifica quase tudo. O que sobra de difícil é uma coisa só, e é técnica.</p>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:30px 0 10px">Veredito</h2>
+<p style="margin:0 0 14px"><strong>O design está pronto para construir.</strong> Dez telas coerentes, sistema visual tokenizado, especificação escrita. Para o tamanho deste projeto, isso é mais do que suficiente — não precisa de mais rodada de design antes de escrever código.</p>
+<p style="margin:0 0 14px">O que ainda não sabemos é se a câmera acerta a carta. Todo o resto do app é bonito e inútil se ela apontar para uma carta e o app errar. <strong>Essa é a única pergunta que precisa de resposta antes de construir as telas.</strong></p>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:30px 0 10px">Sobre o dinheiro na tela</h2>
+<p style="margin:0 0 14px">Ajustado. O valor total continua no app — é o número que chama atenção e faz a coleção parecer importante — mas saiu do centro. A tela de coleção agora abre com <strong>quantas cartas ela tem</strong>, e o valor aparece como uma linha discreta embaixo. A lista de cartas mostra quantidade e raridade, não preço. No detalhe de cada carta, o valor virou uma célula entre outras quatro, e as variações de preço em verde e vermelho sumiram — elas ensinavam a acompanhar o mercado, que não é o que queremos aos 11 anos.</p>
+<p style="margin:0 0 14px">A carta continua sendo carta. O valor é curiosidade, não placar.</p>
+
+<div style="height:1px;background:rgba(122,75,196,.2);margin:30px 0"></div>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:0 0 12px">Engenharia — em ordem</h2>
+<ol style="margin:0 0 14px;padding-left:22px">
+<li style="margin-bottom:10px"><strong>Testar o reconhecimento antes de tudo.</strong> Sem interface: fotografe 50 cartas da coleção dela, em casa, com a luz do quarto, algumas na sleeve, e veja se a carta certa aparece entre as três primeiras. Se aparecer quase sempre, siga. Se não, o app muda de forma — vira busca por nome com a câmera como atalho, o que continua sendo um bom app.</li>
+<li style="margin-bottom:10px"><strong>Resolver a origem dos dados.</strong> Nomes, artes, ataques, HP e preço precisam vir de algum lugar. Existem APIs públicas e gratuitas de catálogo de TCG que resolvem isso para uso pessoal. Escolha uma antes de modelar o banco — a estrutura dela vai definir a sua.</li>
+<li style="margin-bottom:10px"><strong>Guardar tudo no aparelho.</strong> Ela vai usar na casa da amiga e na loja, sem rede. A coleção mora no telefone; a rede só busca carta nova e preço. Sem login: se der para evitar contas, evite.</li>
+<li style="margin-bottom:10px"><strong>Construir só o caminho principal primeiro:</strong> escolher coleção → escanear → escolher candidato → confirmar → coleção. Esse caminho precisa estar impecável. Jornadas, busca e perfil vêm depois, e o app já é útil sem eles.</li>
+<li style="margin-bottom:0"><strong>Não errar os casos chatos:</strong> sem permissão de câmera, nada reconhecido, sem internet, coleção vazia no primeiro uso. Com 6 usuários, um erro sem saída é um app abandonado.</li>
+</ol>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:30px 0 12px">Design — o que ainda falta</h2>
+<ol style="margin:0 0 14px;padding-left:22px">
+<li style="margin-bottom:10px"><strong>O primeiro uso.</strong> A tela que ela vê no dia do presente não existe: nenhuma carta, nenhuma região começada. É o único momento em que a primeira impressão importa de verdade.</li>
+<li style="margin-bottom:10px"><strong>Os estados de erro.</strong> Câmera sem permissão, carta não reconhecida, sem internet. Cada um precisa de uma saída óbvia e de um texto que não assuste.</li>
+<li style="margin-bottom:10px"><strong>Escanear várias de uma vez.</strong> Ela vai chegar com trinta cartas. Hoje o "lote" é só um botão que troca uma frase; falta a fila e a revisão no fim.</li>
+<li style="margin-bottom:10px"><strong>Editar depois.</strong> O estado de conservação aparece no detalhe mas não tem onde ser mudado.</li>
+<li style="margin-bottom:0"><strong>Ícones de verdade,</strong> no lugar dos símbolos provisórios.</li>
+</ol>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:30px 0 10px">O que vale mais do que qualquer tela nova</h2>
+<p style="margin:0 0 14px">O app hoje é ela sozinha com as cartas dela. Com quatro amigas usando, a coisa mais divertida possível é <strong>ver a coleção uma da outra e descobrir quem tem a repetida que a outra quer</strong>. É simples de construir num app de seis pessoas — nem precisa de servidor de verdade — e é o que transforma um catálogo em uma brincadeira.</p>
+<p style="margin:0 0 14px">Não é para a primeira versão. Mas é a segunda coisa a fazer, antes de perfil, conquistas e níveis — que são a parte mais divertida de programar e a menos importante de ter.</p>
+
+<h2 style="font:700 21px/1.25 Sora,sans-serif;margin:30px 0 10px">Como saber que ficou bom</h2>
+<p style="margin:0 0 14px">Uma frase, e não tem número nenhum: <strong>ela senta com uma pilha de trinta cartas, cadastra todas sem pedir ajuda, e depois mostra o app para uma amiga.</strong></p>
+
+</div>
+</doc-page>
+</x-dc>
+</body>
+</html>

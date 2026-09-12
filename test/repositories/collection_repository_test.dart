@@ -3,6 +3,7 @@ import 'package:pokecardex_scanner_mvp/repositories/collection_repository.dart';
 
 class _FakeCollectionStore implements CollectionStore {
   final List<Map<String, dynamic>> upsertCalls = [];
+  final List<String> deletedIds = [];
 
   @override
   Future<List<Map<String, dynamic>>> fetchCollections() async => const [];
@@ -24,6 +25,11 @@ class _FakeCollectionStore implements CollectionStore {
 
   @override
   Future<List<int>> fetchOwnedNationalDexIds() async => const [];
+
+  @override
+  Future<void> deleteCard(String entryId) async {
+    deletedIds.add(entryId);
+  }
 
   @override
   Future<Map<String, dynamic>> upsertCard({
@@ -93,6 +99,15 @@ void main() {
     expect(store.upsertCalls[1]['finish'], 'holo');
     expect(store.upsertCalls[1]['quantity'], 2);
     expect(store.upsertCalls[2]['finish'], 'reverse');
+  });
+
+  test('removeCardFromCollection delega pro store.deleteCard', () async {
+    final store = _FakeCollectionStore();
+    final repo = CollectionRepository(store: store, currentUserId: () => 'user-1');
+
+    await repo.removeCardFromCollection('entry-42');
+
+    expect(store.deletedIds, ['entry-42']);
   });
 
   test('sem sessão logada: recusa em vez de gravar sem user_id', () async {
